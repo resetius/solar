@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/solar/exampleapp">
+    <file preprocess="xml-stripblanks">data.glade</file>
+    <file preprocess="xml-stripblanks">solar_main.glade</file>
+    <file>theme.css</file>
+  </gresource>
+</gresources>
