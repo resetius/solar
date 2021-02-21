@@ -246,7 +246,7 @@ static gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event,
     return TRUE;
 }
 
-static void close_window(struct App* app)
+static void close_window(GtkWidget* widget, struct App* app)
 {   
     if (app->surface)
     {
