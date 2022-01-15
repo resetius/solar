@@ -8,17 +8,20 @@ int Stop = 0;
 double Zoom = 10.0;
 double ZoomInitial = 10.0;
 
+//typedef float real;
+typedef double real;
+
 struct p
 {
-    double x[3];
+    real x[3];
 };
 
 struct body
 {
-    double x[3];
-    double v[3];
-    double a[3];
-    double mass;
+    real x[3];
+    real v[3];
+    real a[3];
+    real mass;
     int fixed;
     char name[100];
 };
@@ -83,7 +86,7 @@ void step_verlet() {
 
     for (i = 0; i < nbodies; ++i)
     {
-        memcpy(body[i].x, dv_list[i].x, 3*sizeof(double));
+        memcpy(body[i].x, dv_list[i].x, sizeof(dv_list[i].x));
     }
 }
 
