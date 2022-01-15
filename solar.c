@@ -61,7 +61,7 @@ void step_verlet() {
             if (i == j) { continue; }
             double R = 0.0;
 
-            struct body *r1 = &body[i];
+            struct p *r1 = &new_pos;
             struct body *r2 = &body[j];
             for (k = 0; k < 3; ++k)
             {
