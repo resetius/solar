@@ -17,22 +17,23 @@ struct body
 {
     double x[3];
     double v[3];
+    double a[3];
     double mass;
     int fixed;
     char name[100];
 };
 
 struct body body[] = {
-    {{0, 0, 0}, {0, 0, 0}, 333333, 1, "Sun"},          
-    {{0, 0.39, 0}, {1.58, 0, 0}, 0.038, 0, "Mercury"},
-    {{0, 0.72, 0}, {1.17, 0, 0}, 0.82, 0, "Venus"},    
-    {{0, 1, 0}, {1, 0, 0}, 1, 0, "Earth"},
-    {{0, 1.00256, 0}, {1.03, 0, 0}, 0.012, 0, "Moon"}, 
-    {{0, 1.51, 0}, {0.8, 0, 0}, 0.1, 0, "Mars"},
-    {{0, 5.2, 0}, {0.43, 0, 0}, 317, 0, "Jupiter"},    
-    {{0, 9.3, 0}, {0.32, 0, 0}, 95, 0, "Saturn"},
-    {{0, 19.3, 0}, {0.23, 0, 0}, 14.5, 0, "Uranus"},   
-    {{0, 30, 0}, {0.18, 0, 0}, 16.7, 0, "Neptune"}};
+    {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, 333333, 1, "Sun"},
+    {{0, 0.39, 0}, {1.58, 0, 0}, {0, 0, 0}, 0.038, 0, "Mercury"},
+    {{0, 0.72, 0}, {1.17, 0, 0}, {0, 0, 0}, 0.82, 0, "Venus"},
+    {{0, 1, 0}, {1, 0, 0}, {0, 0, 0}, 1, 0, "Earth"},
+    {{0, 1.00256, 0}, {1.03, 0, 0}, {0, 0, 0}, 0.012, 0, "Moon"},
+    {{0, 1.51, 0}, {0.8, 0, 0}, {0, 0, 0}, 0.1, 0, "Mars"},
+    {{0, 5.2, 0}, {0.43, 0, 0}, {0, 0, 0}, 317, 0, "Jupiter"},
+    {{0, 9.3, 0}, {0.32, 0, 0}, {0, 0, 0}, 95, 0, "Saturn"},
+    {{0, 19.3, 0}, {0.23, 0, 0}, {0, 0, 0}, 14.5, 0, "Uranus"},
+    {{0, 30, 0}, {0.18, 0, 0}, {0, 0, 0}, 16.7, 0, "Neptune"}};
 
 const int nbodies = 10;
 
@@ -42,6 +43,48 @@ int Max(int a, int b) {
 
 int Min(int a, int b) {
     return a<b?a:b;
+}
+
+void step_verlet() {
+    int i, j, k;
+    struct p dv_list[nbodies];
+    for (i = 0; i < nbodies; ++i)
+    {
+        struct p new_pos; memset(&new_pos, 0, sizeof(new_pos));
+        for (j = 0; j < 3; j++) {
+            new_pos.x[j] = body[i].x[j] + dt * body[i].v[j] + 0.5*dt*dt*body[i].a[j];
+        }
+        dv_list[i] = new_pos;
+
+        struct p new_a; memset(&new_a, 0, sizeof(new_a));
+        for (j = 0; j < nbodies; j++) {
+            if (i == j) { continue; }
+            double R = 0.0;
+
+            struct body *r1 = &body[i];
+            struct body *r2 = &body[j];
+            for (k = 0; k < 3; ++k)
+            {
+                R += (r1->x[k] - r2->x[k]) * (r1->x[k] - r2->x[k]);
+            }
+            R = sqrt(R);
+
+            for (k = 0; k < 3; ++k)
+            {
+                new_a.x[k] += G * body[j].mass * (r2->x[k] - r1->x[k]) / R / R / R;
+            }
+        }
+
+        for (j = 0; j < 3; j++) {
+            body[i].v[j] += 0.5 * dt * (new_a.x[j] + body[i].a[j]);
+            body[i].a[j] = new_a.x[j];
+        }
+    }
+
+    for (i = 0; i < nbodies; ++i)
+    {
+        memcpy(body[i].x, dv_list[i].x, 3*sizeof(double));
+    }
 }
 
 void step()
@@ -247,7 +290,7 @@ static gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event,
 }
 
 static void close_window(GtkWidget* widget, struct App* app)
-{   
+{
     if (app->surface)
     {
         cairo_surface_destroy(app->surface);
@@ -270,7 +313,8 @@ gboolean redraw_timeout(struct App *app)
 
     for (i = 0; i < 5; i = i + 1)
     {
-        step();
+        //step();
+        step_verlet();
     }
 
     char buf[1024];
@@ -369,7 +413,7 @@ static gboolean mouse_scroll (GtkWidget *widget,
     }
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 
-    return TRUE;  
+    return TRUE;
 }
 
 int main(int argc, char **argv)
@@ -414,13 +458,13 @@ int main(int argc, char **argv)
     g_signal_connect(drawing_area, "configure-event", G_CALLBACK(configure_event_cb), &app);
     g_signal_connect(drawing_area, "motion-notify-event", G_CALLBACK(motion_notify_event_cb), &app);
     g_signal_connect(drawing_area, "button-press-event", G_CALLBACK(button_press_event_cb), &app);
-    
+
     g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), &app);
     g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), &app);
     g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), &app);
 
     gtk_widget_set_events(drawing_area,
-                          gtk_widget_get_events(drawing_area) 
+                          gtk_widget_get_events(drawing_area)
                           | GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK);
 
     for (i=0; i<nbodies; i=i+1) {
@@ -450,13 +494,13 @@ int main(int argc, char **argv)
         }
 
         GtkWidget* frame = gtk_frame_new(NULL);
-        
+
         /* reparent */
         g_object_ref(page);
         gtk_container_remove(GTK_CONTAINER(window1), page);
         gtk_container_add(GTK_CONTAINER(frame), page);
         g_object_unref(page);
-        
+
         gtk_stack_add_titled(GTK_STACK(app.pages), frame, body[i].name, body[i].name);
 
         g_object_unref(G_OBJECT(b));
