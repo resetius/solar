@@ -304,7 +304,7 @@ static void close_window(GtkWidget* widget, struct App* app)
         app->timer_id = 0;
     }
 
-    gtk_main_quit();
+    // gtk_main_quit();
 }
 
 gboolean redraw_timeout(struct App *app)
@@ -419,19 +419,17 @@ static gboolean mouse_scroll (GtkWidget *widget,
     return TRUE;
 }
 
-int main(int argc, char **argv)
+static void activate(GtkApplication *gapp, gpointer user_data)
 {
-    struct App app;
+    struct App* app = user_data;
+
     int i, j;
-    gtk_init (&argc, &argv);
     GtkWidget * window;
     GtkWidget *drawing_area;
     GtkGesture * zoom;
 
-    memset(&app, 0, sizeof(app));
-
-    //GtkBuilder * builder = gtk_builder_new_from_file("solar_main.glade");
     GtkBuilder * builder = gtk_builder_new_from_resource("/solar/exampleapp/solar_main.glade");
+    gtk_builder_set_application(builder, gapp);
     gtk_builder_connect_signals(builder, NULL);
 
     GtkCssProvider *css_provider = gtk_css_provider_new();
@@ -439,45 +437,44 @@ int main(int argc, char **argv)
     gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(css_provider),
                                               GTK_STYLE_PROVIDER_PRIORITY_USER);
 
-    //window = gtk_application_window_new(app);
     window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     if (!window) {
         printf("Smth went wrong!\n");
-        return -1;
+        _exit(-1);
     }
+    gtk_window_set_application(GTK_WINDOW(window), gapp);
 
-    app.pages = GTK_WIDGET(gtk_builder_get_object(builder, "pages"));
-    if (!app.pages) {
+    app->pages = GTK_WIDGET(gtk_builder_get_object(builder, "pages"));
+    if (!app->pages) {
         printf("Smth went wrong!\n");
-        return -1;
+        _exit(-1);
     }
     drawing_area = GTK_WIDGET(gtk_builder_get_object(builder, "drawing_area"));
     if (!drawing_area) {
         printf("Smth went wrong!\n");
-        return -1;
+        _exit(-1);
     }
     zoom = gtk_gesture_zoom_new (drawing_area);
-    g_signal_connect(drawing_area, "draw", G_CALLBACK(draw_cb), &app);
-    g_signal_connect(drawing_area, "configure-event", G_CALLBACK(configure_event_cb), &app);
-    g_signal_connect(drawing_area, "motion-notify-event", G_CALLBACK(motion_notify_event_cb), &app);
-    g_signal_connect(drawing_area, "button-press-event", G_CALLBACK(button_press_event_cb), &app);
+    g_signal_connect(drawing_area, "draw", G_CALLBACK(draw_cb), app);
+    g_signal_connect(drawing_area, "configure-event", G_CALLBACK(configure_event_cb), app);
+    g_signal_connect(drawing_area, "motion-notify-event", G_CALLBACK(motion_notify_event_cb), app);
+    g_signal_connect(drawing_area, "button-press-event", G_CALLBACK(button_press_event_cb), app);
 
-    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), &app);
-    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), &app);
-    g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), &app);
+    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), app);
+    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), app);
+    g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), app);
 
     gtk_widget_set_events(drawing_area,
                           gtk_widget_get_events(drawing_area)
                           | GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK);
 
     for (i=0; i<nbodies; i=i+1) {
-        //GtkBuilder * b = gtk_builder_new_from_file("data.glade");
         GtkBuilder * b = gtk_builder_new_from_resource("/solar/exampleapp/data.glade");
         GtkWidget* window1 = GTK_WIDGET(gtk_builder_get_object(b, "window1"));
         GtkWidget* page = GTK_WIDGET(gtk_builder_get_object(b, "frame"));
         if (!page||!window1) {
             printf("WTF\n");
-            return -1;
+            _exit(-1);
         }
 
         //gtk_style_context_add_provider(gtk_widget_get_style_context(page),
@@ -486,14 +483,14 @@ int main(int argc, char **argv)
         for (j=0;j<3;j=j+1) {
             char buf[256];
             snprintf(buf, sizeof(buf), "x%d", j);
-            app.body_ctls[i].x[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
+            app->body_ctls[i].x[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
             snprintf(buf, sizeof(buf), "v%d", j);
-            app.body_ctls[i].v[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
+            app->body_ctls[i].v[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
 
             //gtk_entry_set_has_frame(body_ctls[i].x[j], FALSE);
             //gtk_entry_set_has_frame(body_ctls[i].v[j], FALSE);
-            gtk_widget_set_name(GTK_WIDGET(app.body_ctls[i].x[j]), "entry");
-            gtk_widget_set_name(GTK_WIDGET(app.body_ctls[i].v[j]), "entry");
+            gtk_widget_set_name(GTK_WIDGET(app->body_ctls[i].x[j]), "entry");
+            gtk_widget_set_name(GTK_WIDGET(app->body_ctls[i].v[j]), "entry");
         }
 
         GtkWidget* frame = gtk_frame_new(NULL);
@@ -504,23 +501,35 @@ int main(int argc, char **argv)
         gtk_container_add(GTK_CONTAINER(frame), page);
         g_object_unref(page);
 
-        gtk_stack_add_titled(GTK_STACK(app.pages), frame, body[i].name, body[i].name);
+        gtk_stack_add_titled(GTK_STACK(app->pages), frame, body[i].name, body[i].name);
 
         g_object_unref(G_OBJECT(b));
     }
 
-    g_signal_connect(window, "destroy", G_CALLBACK(close_window), &app);
+    g_signal_connect(window, "destroy", G_CALLBACK(close_window), app);
 
     gtk_widget_show_all(window);
 
-    gtk_stack_set_visible_child_name(GTK_STACK(app.pages), "Earth");
+    gtk_stack_set_visible_child_name(GTK_STACK(app->pages), "Earth");
 
-    app.drawing_area = drawing_area;
-    app.timer_id = g_timeout_add(100, (GSourceFunc)redraw_timeout, &app);
+    app->drawing_area = drawing_area;
+    app->timer_id = g_timeout_add(100, (GSourceFunc)redraw_timeout, app);
 
     g_object_unref(G_OBJECT(builder));
+}
 
-    gtk_main();
+int main(int argc, char **argv)
+{
+    struct App app;
+    GtkApplication* gapp;
+    int status;
 
-    return 0;
+    memset(&app, 0, sizeof(app));
+
+    gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
+    g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
+    status = g_application_run (G_APPLICATION (gapp), argc, argv);
+    g_object_unref (gapp);
+
+    return status;
 }
