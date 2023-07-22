@@ -186,11 +186,10 @@ struct App {
  * signal receives a ready-to-be-used cairo_t that is already
  * clipped to only draw the exposed areas of the widget
  */
-static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w1, int h1, void* user_data)
+static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
 {
     struct App* app = user_data;
-    int w = 400, i;
-    for (i = 0; i < nbodies; ++i)
+    for (int i = 0; i < nbodies; ++i)
     {
         // assume w = h
         double x = body[i].x[0] * w / Zoom + w / 2.0;
@@ -365,13 +364,11 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     */
 
     GtkWidget* window = gtk_application_window_new(gapp);
-    //gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
+    gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
 
     GtkWidget* drawing_area = gtk_drawing_area_new();
-    gtk_drawing_area_set_content_width(
-        GTK_DRAWING_AREA(drawing_area), 800);
-    gtk_drawing_area_set_content_height(
-        GTK_DRAWING_AREA(drawing_area), 800);
+    gtk_widget_set_vexpand(drawing_area, TRUE);
+    gtk_widget_set_hexpand(drawing_area, TRUE);
 
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_window_set_child(GTK_WINDOW(window), box);
