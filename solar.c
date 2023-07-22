@@ -187,14 +187,6 @@ struct App {
     GtkWidget* drawing_area;
 
     guint timer_id;
-
-    // child
-    int input;
-    int output;
-    int error;
-
-    GInputStream* ginput;
-    char input_buffer[1024];
 };
 
 /* Redraw the screen from the surface. Note that the ::draw
