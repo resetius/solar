@@ -2,6 +2,11 @@
 #include <math.h>
 #include <limits.h>
 
+#include <gio/gio.h>
+#ifdef G_OS_UNIX
+#include <gio/gunixinputstream.h>
+#endif
+
 double dt = 0.005;
 const double G = 2.92e-6;
 int Stop = 0;
@@ -180,6 +185,14 @@ struct App {
     GtkWidget* drawing_area;
 
     guint timer_id;
+
+    // child
+    int input;
+    int output;
+    int error;
+
+    GInputStream* ginput;
+    char input_buffer[1024];
 };
 
 /* Redraw the screen from the surface. Note that the ::draw
@@ -442,6 +455,42 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_widget_set_visible(window, TRUE);
 }
 
+void spawn(struct App* app) {
+    GPid pid;
+    int input, output, error;
+    gchar* argv[] = {"./euler.exe", "--input", "2bodies.txt", "--dt", "0.001", NULL};
+    if (g_spawn_async_with_pipes(
+        NULL,
+        argv,
+        NULL,
+        G_SPAWN_DEFAULT,
+        NULL, NULL,
+        &pid,
+        &input, &output, &error,
+        NULL) == FALSE)
+    {
+        fprintf(stderr, "Cannot spawn\n");
+        exit(1);
+    }
+
+    app->input = input;
+    app->output = output;
+    app->error = error;
+
+    // app->ginput = g_unix_input_stream_new(input, TRUE);
+}
+
+static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
+    struct App* app = user_data;
+}
+
+void read_child(struct App* app) {
+    g_input_stream_read_async(
+        app->ginput,
+        app->input_buffer, sizeof(app->input_buffer), 0,
+        NULL, on_new_data, app);
+}
+
 int main(int argc, char **argv)
 {
     struct App app;
@@ -449,6 +498,8 @@ int main(int argc, char **argv)
     int status;
 
     memset(&app, 0, sizeof(app));
+
+    spawn(&app);
 
     gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
