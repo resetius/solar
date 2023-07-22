@@ -194,6 +194,11 @@ static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_da
         // assume w = h
         double x = body[i].x[0] * w / Zoom + w / 2.0;
         double y = body[i].x[1] * w / Zoom + w / 2.0;
+        if (app->active_body == i) {
+            cairo_set_source_rgb(cr, 1, 0, 0);
+        } else {
+            cairo_set_source_rgb(cr, 0, 0, 0);
+        }
         cairo_arc(cr, x, y, 1, 0, 2 * M_PI);
         cairo_fill(cr);
 
