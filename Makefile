@@ -23,11 +23,8 @@ clean:
 solar.exe: solar.o data_glade.o Makefile
 		$(COMPILER) solar.o data_glade.o $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
 
-data_glade.c: data.xml data.glade theme.css solar_main.glade
-		glib-compile-resources data.xml --target data_glade.c --generate-source
-
 %.exe: %.o Makefile
 		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
 
 %.o: %.c Makefile
-		$(COMPILER) -g -Wall $(CFLAGS) `pkg-config --cflags gtk+-3.0` -c $< -o $@
+		$(COMPILER) -g -Wall $(CFLAGS) -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED `pkg-config --cflags gtk+-3.0` -c $< -o $@
