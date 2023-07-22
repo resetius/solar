@@ -1,13 +1,7 @@
 #include <gtk/gtk.h>
+#include <gio/gio.h>
 #include <math.h>
 #include <limits.h>
-
-#include <gio/gio.h>
-#ifdef G_OS_UNIX
-#include <gio/gunixinputstream.h>
-#else
-#include <gio/gwin32inputstream.h>
-#endif
 
 double dt = 0.005;
 const double G = 2.92e-6;
@@ -187,6 +181,12 @@ struct App {
     GtkWidget* drawing_area;
 
     guint timer_id;
+
+    // child
+    GSubprocess* subprocess;
+
+    GInputStream* input;
+    char input_buffer[1024];
 };
 
 /* Redraw the screen from the surface. Note that the ::draw
@@ -376,6 +376,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     */
 
     GtkWidget* window = gtk_application_window_new(gapp);
+    gtk_window_set_title (GTK_WINDOW (window), "Window");
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
 
     GtkWidget* drawing_area = gtk_drawing_area_new();
@@ -446,46 +447,35 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     app->drawing_area = drawing_area;
     app->timer_id = g_timeout_add(100, (GSourceFunc)redraw_timeout, app);
 
-    gtk_widget_set_visible(window, TRUE);
+    gtk_window_present(GTK_WINDOW(window));
 }
 
 void spawn(struct App* app) {
-    GPid pid;
-    int input, output, error;
-    gchar* argv[] = {"./euler.exe", "--input", "2bodies.txt", "--dt", "0.001", NULL};
-    if (g_spawn_async_with_pipes(
-        NULL,
-        argv,
-        NULL,
-        G_SPAWN_DEFAULT,
-        NULL, NULL,
-        &pid,
-        &input, &output, &error,
-        NULL) == FALSE)
-    {
-        fprintf(stderr, "Cannot spawn\n");
-        exit(1);
-    }
+    const gchar* argv[] = {
+        "./euler.exe", "--input", "2bodies.txt", "--dt", "0.001", "--T", "0.1", NULL};
 
-    app->input = input;
-    app->output = output;
-    app->error = error;
-
-#ifdef G_OS_UNIX
-    app->ginput = g_unix_input_stream_new(input, TRUE);
-#else
-    app->ginput = g_win32_input_stream_new((void*)((intptr_t)input), TRUE);
-#endif
+    app->subprocess = g_subprocess_newv(&argv[0], G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    app->input = g_subprocess_get_stdout_pipe(app->subprocess);
 }
+
+void read_child(struct App* app);
 
 static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
     struct App* app = user_data;
-    printf("On new data\n");
+
+    gssize size = g_input_stream_read_finish(G_INPUT_STREAM(input), res, NULL);
+
+    if (size > 0) {
+
+        printf("On new data %s\n", app->input_buffer);
+
+        read_child(app);
+    }
 }
 
 void read_child(struct App* app) {
     g_input_stream_read_async(
-        app->ginput,
+        app->input,
         app->input_buffer, sizeof(app->input_buffer), 0,
         NULL, on_new_data, app);
 }
@@ -503,6 +493,7 @@ int main(int argc, char **argv)
 
     gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
+
     status = g_application_run (G_APPLICATION (gapp), argc, argv);
     g_object_unref (gapp);
 
