@@ -488,6 +488,7 @@ void spawn(struct App* app) {
 
 static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
     struct App* app = user_data;
+    printf("On new data\n");
 }
 
 void read_child(struct App* app) {
@@ -506,6 +507,7 @@ int main(int argc, char **argv)
     memset(&app, 0, sizeof(app));
 
     spawn(&app);
+    read_child(&app);
 
     gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
