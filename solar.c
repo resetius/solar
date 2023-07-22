@@ -5,6 +5,8 @@
 #include <gio/gio.h>
 #ifdef G_OS_UNIX
 #include <gio/gunixinputstream.h>
+#else
+#include <gio/gwin32inputstream.h>
 #endif
 
 double dt = 0.005;
@@ -477,7 +479,11 @@ void spawn(struct App* app) {
     app->output = output;
     app->error = error;
 
-    // app->ginput = g_unix_input_stream_new(input, TRUE);
+#ifdef G_OS_UNIX
+    app->ginput = g_unix_input_stream_new(input, TRUE);
+#else
+    app->ginput = g_win32_input_stream_new((void*)((intptr_t)input), TRUE);
+#endif
 }
 
 static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
