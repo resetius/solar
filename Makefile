@@ -18,10 +18,10 @@ COMPILER ?= $(CC)
 All: solar.exe
 
 clean:
-		rm -f *.o *.exe data_glade.c
+		rm -f *.o *.exe 
 
-solar.exe: solar.o data_glade.o Makefile
-		$(COMPILER) solar.o data_glade.o $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
+solar.exe: solar.o Makefile
+		$(COMPILER) solar.o $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
 
 %.exe: %.o Makefile
 		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
