@@ -4,6 +4,7 @@
 #include <math.h>
 
 struct body {
+    char name[16];
     double r[3];
     double v[3];
     double a[3];
@@ -60,7 +61,6 @@ void euler_next(struct data* data) {
 
 double kepler(double dt) {
     double G = 1;
-    double t;
     double MM = 1e5;
 
     struct body bodies[] = {
@@ -91,7 +91,6 @@ double kepler(double dt) {
 
     for (int i = 0; i < 100; i++) {
         euler_next(&data);
-        t = (i + 1) * dt;
 
         double r = 0;
         for (int k = 0; k < 3; k++) {
@@ -128,9 +127,67 @@ void usage(const char* name) {
     exit(0);
 }
 
+/*
+  file format:
+  G
+  N
+  Body1 r0 r1 r2 v0 v1 v2 Mass
+  Body2 r0 r1 r2 v0 v1 v2 Mass
+  ...
+  BodyN r0 r1 r2 v0 v1 v2 Mass
+ */
+
+void load(struct data* data, const char* fn) {
+    FILE* f = fopen(fn, "rb");
+    if (!f) { goto err; }
+
+    if (fscanf(f, "%lf %d", &data->G, &data->nbodies) != 2) { goto err; }
+    data->bodies = calloc(data->nbodies, sizeof(struct body));
+    for (int i = 0; i < data->nbodies; i++) {
+        if (fscanf(
+                f, "%15s %lf %lf %lf %lf %lf %lf %lf",
+                data->bodies[i].name,
+                &data->bodies[i].r[0], &data->bodies[i].r[1], &data->bodies[i].r[2],
+                &data->bodies[i].v[0], &data->bodies[i].v[1], &data->bodies[i].v[2],
+                &data->bodies[i].m) != 8)
+        {
+            goto err;
+        }
+    }
+
+    fclose(f);
+
+    return;
+
+err:
+    fprintf(stderr, "Cannot open or parse file: '%s'\n", fn);
+    exit(1);
+}
+
+void print(struct data* data) {
+    for (int i = 0; i < data->nbodies; i++) {
+        printf(
+            "%s %e %e %e %e %e %e %e\n",
+            data->bodies[i].name,
+            data->bodies[i].r[0], data->bodies[i].r[1], data->bodies[i].r[2],
+            data->bodies[i].v[0], data->bodies[i].v[1], data->bodies[i].v[2],
+            data->bodies[i].m);
+    }
+    printf("\n");
+}
+
+void solve(struct data* data) {
+    print(data);
+
+    for (int i = 0; i < 100; i++) {
+        euler_next(data);
+        print(data);
+    }
+}
+
 int main(int argc, char** argv) {
     const char* fn = NULL;
-    double dt = 0.01;
+    double dt = 0.0001;
     int test_mode = 0;
     for (int i = 1; i < argc; i++) {
         if (i < argc - 1 && !strcmp(argv[i], "--input")) {
@@ -149,6 +206,11 @@ int main(int argc, char** argv) {
     if (!fn) {
         usage(argv[0]);
     }
+
+    struct data data = {.dt = dt};
+    load(&data, fn);
+    solve(&data);
+    free(data.bodies);
 
     return 0;
 }
