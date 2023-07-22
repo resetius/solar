@@ -122,11 +122,6 @@ void run_test() {
     exit(0);
 }
 
-void usage(const char* name) {
-    printf("%s --input file.txt [--dt 0.001] [--test]\n", name);
-    exit(0);
-}
-
 /*
   file format:
   G
@@ -176,24 +171,33 @@ void print(struct data* data) {
     printf("\n");
 }
 
-void solve(struct data* data) {
+void solve(struct data* data, double T) {
     print(data);
 
-    for (int i = 0; i < 100; i++) {
+    int N = T / data->dt;
+    for (int i = 0; i < N; i++) {
         euler_next(data);
         print(data);
     }
 }
 
+void usage(const char* name) {
+    printf("%s --input file.txt [--dt 0.001] [--T 10] [--test]\n", name);
+    exit(0);
+}
+
 int main(int argc, char** argv) {
     const char* fn = NULL;
     double dt = 0.0001;
+    double T = 10.0;
     int test_mode = 0;
     for (int i = 1; i < argc; i++) {
         if (i < argc - 1 && !strcmp(argv[i], "--input")) {
             fn = argv[++i];
         } else if (i < argc - 1 && !strcmp(argv[i], "--dt")) {
             dt = atof(argv[++i]);
+        } else if (i < argc - 1 && !strcmp(argv[i], "--T")) {
+            T = atof(argv[++i]);
         } else if (!strcmp(argv[i], "--test")) {
             test_mode = 1;
         } else {
@@ -209,7 +213,7 @@ int main(int argc, char** argv) {
 
     struct data data = {.dt = dt};
     load(&data, fn);
-    solve(&data);
+    solve(&data, T);
     free(data.bodies);
 
     return 0;
