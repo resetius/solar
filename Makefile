@@ -15,13 +15,16 @@ endif
 
 COMPILER ?= $(CC)
 
-All: solar.exe
+All: solar.exe euler.exe
 
 clean:
-		rm -f *.o *.exe 
+		rm -f *.o *.exe
 
 solar.exe: solar.o Makefile
-		$(COMPILER) solar.o $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
+
+euler.exe: euler.o Makefile
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
 
 %.exe: %.o Makefile
 		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
