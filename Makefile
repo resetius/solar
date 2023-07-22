@@ -21,13 +21,13 @@ clean:
 		rm -f *.o *.exe
 
 solar.exe: solar.o Makefile
-		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4,gio-2.0` -lm -o $@
 
 euler.exe: euler.o Makefile
-		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4,gio-2.0` -lm -o $@
 
 %.exe: %.o Makefile
-		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4,gio-2.0` -lm -o $@
 
 %.o: %.c Makefile
-		$(COMPILER) -g -Wall $(CFLAGS) -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED `pkg-config --cflags gtk4` -c $< -o $@
+		$(COMPILER) -g -Wall $(CFLAGS) -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED `pkg-config --cflags gtk4,gio-2.0` -c $< -o $@
