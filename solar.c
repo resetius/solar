@@ -165,16 +165,18 @@ void step()
 
 struct body_ctl
 {
-    GtkEntry *x[3];
-    GtkEntry *v[3];
     double x0, y0;
     int show_tip;
 };
 
 struct App {
     struct body_ctl body_ctls[100];
+    GtkWidget* r[3];
+    GtkWidget* v[3];
+    int active_body;
 
-    GtkWidget* pages;
+    GtkWidget* combo;
+
     GtkWidget* drawing_area;
 
     guint timer_id;
@@ -241,7 +243,8 @@ static gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, 
     int argmin = get_body(event->x, event->y, app);
     if (argmin >= 0)
     {
-        gtk_stack_set_visible_child_name(GTK_STACK(app->pages), body[argmin].name);
+        gtk_combo_box_set_active(GTK_COMBO_BOX(app->combo), argmin);
+        app->active_body = argmin;
     }
 
     /* We've handled the event, stop processing */
@@ -291,15 +294,13 @@ gboolean redraw_timeout(struct App *app)
     }
 
     char buf[1024];
-    for (i = 0; i < nbodies; i = i + 1)
+    i = app->active_body;
+    for (j = 0; j < 3; j = j + 1)
     {
-        for (j = 0; j < 3; j = j + 1)
-        {
-            snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].x[j]);
-            gtk_entry_set_text(app->body_ctls[i].x[j], buf);
-            snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].v[j]);
-            gtk_entry_set_text(app->body_ctls[i].v[j], buf);
-        }
+        snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].x[j]);
+        gtk_entry_set_text(GTK_ENTRY(app->r[j]), buf);
+        snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].v[j]);
+        gtk_entry_set_text(GTK_ENTRY(app->v[j]), buf);
     }
 
     int w = 400;
@@ -326,6 +327,13 @@ gboolean redraw_timeout(struct App *app)
     gtk_widget_queue_draw_area(app->drawing_area, minx, miny, maxx, maxy);
 
     return app->timer_id > 0;
+}
+
+static void
+active_changed(GtkComboBox* self, struct App* app)
+{
+    int active = gtk_combo_box_get_active(self);
+    app->active_body = active;
 }
 
 static void
@@ -365,107 +373,87 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 {
     struct App* app = user_data;
 
-    int i, j;
+    int i;
     GtkWidget * window;
     GtkWidget *drawing_area;
     GtkGesture * zoom;
 
-    GtkBuilder * builder = gtk_builder_new_from_resource("/solar/exampleapp/solar_main.glade");
-    gtk_builder_set_application(builder, gapp);
-    gtk_builder_connect_signals(builder, NULL);
-
     GtkCssProvider *css_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_resource(css_provider, "/solar/exampleapp/theme.css");
-    gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(css_provider),
-                                              GTK_STYLE_PROVIDER_PRIORITY_USER);
+    gtk_style_context_add_provider_for_screen(
+        gdk_screen_get_default(),
+        GTK_STYLE_PROVIDER(css_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_USER);
 
-    window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-    if (!window) {
-        printf("Smth went wrong!\n");
-        _exit(-1);
-    }
-    gtk_window_set_application(GTK_WINDOW(window), gapp);
+    window = gtk_application_window_new(gapp);
+    gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
+    drawing_area = gtk_drawing_area_new();
 
-    app->pages = GTK_WIDGET(gtk_builder_get_object(builder, "pages"));
-    if (!app->pages) {
-        printf("Smth went wrong!\n");
-        _exit(-1);
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_container_add(GTK_CONTAINER(window), box);
+    //gtk_window_set_child(window, drawing_area);
+
+    gtk_box_pack_start(GTK_BOX(box), drawing_area, TRUE, TRUE, 0);
+
+    GtkWidget* rbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(box), rbox, FALSE, FALSE, 0);
+
+    GtkWidget* combo = gtk_combo_box_text_new();
+    for (i=0; i<nbodies; i=i+1) {
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), body[i].name);
     }
-    drawing_area = GTK_WIDGET(gtk_builder_get_object(builder, "drawing_area"));
-    if (!drawing_area) {
-        printf("Smth went wrong!\n");
-        _exit(-1);
-    }
-    zoom = gtk_gesture_zoom_new (drawing_area);
-    // removed
+    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), 0);
+    g_signal_connect(combo, "changed", G_CALLBACK(active_changed), app);
+
+    gtk_box_pack_start(GTK_BOX(rbox), combo, FALSE, FALSE, 0);
+    GtkWidget* x = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), x, FALSE, FALSE, 0);
+    GtkWidget* y = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), y, FALSE, FALSE, 0);
+    GtkWidget* z = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), z, FALSE, FALSE, 0);
+    GtkWidget* vx = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), vx, FALSE, FALSE, 0);
+    GtkWidget* vy = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), vy, FALSE, FALSE, 0);
+    GtkWidget* vz = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rbox), vz, FALSE, FALSE, 0);
+    app->r[0] = x;
+    app->r[1] = y;
+    app->r[2] = z;
+    app->v[0] = vx;
+    app->v[1] = vy;
+    app->v[2] = vz;
+    app->combo = combo;
+
     g_signal_connect(drawing_area, "draw", G_CALLBACK(draw_cb), app);
 
-    //gtk_drawing_area_set_draw_func (GTK_DRAWING_AREA (drawing_area),
-    //                                draw_cb,
-    //                                app, NULL);
+
+    gtk_widget_set_events(
+        drawing_area,
+        gtk_widget_get_events(drawing_area)
+        | GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK);
 
     // moved to GtkEventControllerMotion
     g_signal_connect(drawing_area, "motion-notify-event", G_CALLBACK(motion_notify_event_cb), app);
+
     // moved to GtkGestureClick
     g_signal_connect(drawing_area, "button-press-event", G_CALLBACK(button_press_event_cb), app);
+
     // moved to GtkEventControllerScroll
     g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), app);
+
+    zoom = gtk_gesture_zoom_new (drawing_area);
 
     g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), app);
     g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), app);
 
-    gtk_widget_set_events(drawing_area,
-                          gtk_widget_get_events(drawing_area)
-                          | GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK);
-
-    for (i=0; i<nbodies; i=i+1) {
-        GtkBuilder * b = gtk_builder_new_from_resource("/solar/exampleapp/data.glade");
-        GtkWidget* window1 = GTK_WIDGET(gtk_builder_get_object(b, "window1"));
-        GtkWidget* page = GTK_WIDGET(gtk_builder_get_object(b, "frame"));
-        if (!page||!window1) {
-            printf("WTF\n");
-            _exit(-1);
-        }
-
-        //gtk_style_context_add_provider(gtk_widget_get_style_context(page),
-        //    GTK_STYLE_PROVIDER(css_provider), 0);
-
-        for (j=0;j<3;j=j+1) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "x%d", j);
-            app->body_ctls[i].x[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
-            snprintf(buf, sizeof(buf), "v%d", j);
-            app->body_ctls[i].v[j] = GTK_ENTRY(gtk_builder_get_object(b, buf));
-
-            //gtk_entry_set_has_frame(body_ctls[i].x[j], FALSE);
-            //gtk_entry_set_has_frame(body_ctls[i].v[j], FALSE);
-            gtk_widget_set_name(GTK_WIDGET(app->body_ctls[i].x[j]), "entry");
-            gtk_widget_set_name(GTK_WIDGET(app->body_ctls[i].v[j]), "entry");
-        }
-
-        GtkWidget* frame = gtk_frame_new(NULL);
-
-        /* reparent */
-        g_object_ref(page);
-        gtk_container_remove(GTK_CONTAINER(window1), page);
-        gtk_container_add(GTK_CONTAINER(frame), page);
-        g_object_unref(page);
-
-        gtk_stack_add_titled(GTK_STACK(app->pages), frame, body[i].name, body[i].name);
-
-        g_object_unref(G_OBJECT(b));
-    }
-
     g_signal_connect(window, "destroy", G_CALLBACK(close_window), app);
-
-    gtk_widget_show_all(window);
-
-    gtk_stack_set_visible_child_name(GTK_STACK(app->pages), "Earth");
 
     app->drawing_area = drawing_area;
     app->timer_id = g_timeout_add(100, (GSourceFunc)redraw_timeout, app);
 
-    g_object_unref(G_OBJECT(builder));
+    gtk_widget_show_all(window);
 }
 
 int main(int argc, char **argv)
