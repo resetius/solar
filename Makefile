@@ -21,10 +21,10 @@ clean:
 		rm -f *.o *.exe 
 
 solar.exe: solar.o Makefile
-		$(COMPILER) solar.o $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
+		$(COMPILER) solar.o $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
 
 %.exe: %.o Makefile
-		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk+-3.0` -lm -o $@
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4` -lm -o $@
 
 %.o: %.c Makefile
-		$(COMPILER) -g -Wall $(CFLAGS) -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED `pkg-config --cflags gtk+-3.0` -c $< -o $@
+		$(COMPILER) -g -Wall $(CFLAGS) -DGDK_DISABLE_DEPRECATED -DGTK_DISABLE_DEPRECATED `pkg-config --cflags gtk4` -c $< -o $@
