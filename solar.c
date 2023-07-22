@@ -315,7 +315,7 @@ gboolean redraw_timeout(struct App *app)
 }
 
 static void
-active_changed(GtkDropDown* self, struct App* app)
+active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 {
     int active = gtk_drop_down_get_selected(self);
     app->active_body = active;
@@ -390,7 +390,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     free(strings);
 
     gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
-    g_signal_connect(drop_down, "activate", G_CALLBACK(active_changed), app);
+    g_signal_connect(drop_down, "state-flags-changed", G_CALLBACK(active_changed), app);
     gtk_box_append(GTK_BOX(rbox), drop_down);
 
     for (int i = 0; i < 3; i++) {
