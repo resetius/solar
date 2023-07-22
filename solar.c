@@ -175,7 +175,7 @@ struct App {
     GtkEntryBuffer* v[3];
     int active_body;
 
-    GtkWidget* combo;
+    GtkWidget* drop_down;
 
     GtkWidget* drawing_area;
 
@@ -237,7 +237,7 @@ static void button_press_event_cb(GtkGestureClick* self, int npress, double x, d
     int argmin = get_body(x, y, app);
     if (argmin >= 0)
     {
-        gtk_combo_box_set_active(GTK_COMBO_BOX(app->combo), argmin);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->drop_down), argmin);
         app->active_body = argmin;
     }
 }
@@ -315,9 +315,9 @@ gboolean redraw_timeout(struct App *app)
 }
 
 static void
-active_changed(GtkComboBox* self, struct App* app)
+active_changed(GtkDropDown* self, struct App* app)
 {
-    int active = gtk_combo_box_get_active(self);
+    int active = gtk_drop_down_get_selected(self);
     app->active_body = active;
 }
 
@@ -338,7 +338,7 @@ zoom_scale_changed_cb (GtkGestureZoom *z,
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 }
 
-static gboolean mouse_scroll(
+static void mouse_scroll(
     GtkEventControllerScroll* self,
     double dx, double dy,
     struct App* app)
@@ -374,21 +374,25 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         GTK_DRAWING_AREA(drawing_area), 800);
 
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_window_set_child(window, box);
+    gtk_window_set_child(GTK_WINDOW(window), box);
 
     gtk_box_append(GTK_BOX(box), drawing_area);
 
     GtkWidget* rbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_append(GTK_BOX(box), rbox);
 
-    GtkWidget* combo = gtk_combo_box_text_new();
+    const char** strings = malloc((nbodies+1) * sizeof(char*));
     for (int i = 0; i<nbodies; i=i+1) {
-        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), body[i].name);
+        strings[i] = body[i].name;
     }
-    gtk_combo_box_set_active(GTK_COMBO_BOX(combo), 0);
-    g_signal_connect(combo, "changed", G_CALLBACK(active_changed), app);
+    strings[nbodies] = NULL;
+    GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
+    free(strings);
 
-    gtk_box_append(GTK_BOX(rbox), combo);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
+    g_signal_connect(drop_down, "activate", G_CALLBACK(active_changed), app);
+    gtk_box_append(GTK_BOX(rbox), drop_down);
+
     for (int i = 0; i < 3; i++) {
         GtkWidget* x = gtk_entry_new();
         gtk_box_append(GTK_BOX(rbox), x);
@@ -399,7 +403,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         gtk_box_append(GTK_BOX(rbox), vx);
         app->v[i] = gtk_entry_get_buffer(GTK_ENTRY(vx));
     }
-    app->combo = combo;
+    app->drop_down = drop_down;
 
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw_cb, app, NULL);
 
