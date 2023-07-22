@@ -177,40 +177,8 @@ struct App {
     GtkWidget* pages;
     GtkWidget* drawing_area;
 
-    /* Surface to store current scribbles */
-    cairo_surface_t *surface;
-
     guint timer_id;
 };
-
-static void clear_surface(cairo_surface_t *surface)
-{
-    cairo_t *cr;
-
-    cr = cairo_create(surface);
-
-    cairo_set_source_rgb(cr, 1, 1, 1);
-    cairo_paint(cr);
-
-    cairo_destroy(cr);
-}
-
-/* Create a new surface of the appropriate size to store our scribbles */
-static gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, struct App* app)
-{
-    if (app->surface)
-        cairo_surface_destroy(app->surface);
-
-    app->surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR,
-                                                gtk_widget_get_allocated_width(widget),
-                                                gtk_widget_get_allocated_height(widget));
-
-    /* Initialize the surface to white */
-    clear_surface(app->surface);
-
-    /* We've handled the configure event, no need for further processing. */
-    return TRUE;
-}
 
 /* Redraw the screen from the surface. Note that the ::draw
  * signal receives a ready-to-be-used cairo_t that is already
@@ -218,8 +186,25 @@ static gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, 
  */
 static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, struct App* app)
 {
-    cairo_set_source_surface(cr, app->surface, 0, 0);
-    cairo_paint(cr);
+    int w = 400, i;
+    for (i = 0; i < nbodies; ++i)
+    {
+        // assume w = h
+        double x = body[i].x[0] * w / Zoom + w / 2.0;
+        double y = body[i].x[1] * w / Zoom + w / 2.0;
+        cairo_arc(cr, x, y, 1, 0, 2 * M_PI);
+        cairo_fill(cr);
+
+        app->body_ctls[i].x0 = x;
+        app->body_ctls[i].y0 = y;
+
+        if (app->body_ctls[i].show_tip)
+        {
+            cairo_set_font_size(cr, 13);
+            cairo_move_to(cr, x, y);
+            cairo_show_text(cr, body[i].name);
+        }
+    }
 
     return FALSE;
 }
@@ -253,10 +238,6 @@ static int get_body(double x, double y, struct App* app) {
  */
 static gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, struct App* app)
 {
-    /* paranoia check, in case we haven't gotten a configure event */
-    if (app->surface == NULL)
-        return FALSE;
-
     int argmin = get_body(event->x, event->y, app);
     if (argmin >= 0)
     {
@@ -274,10 +255,6 @@ static gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, 
 static gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, struct App* app)
 {
     int i;
-    /* paranoia check, in case we haven't gotten a configure event */
-    if (app->surface == NULL)
-        return FALSE;
-
     int argmin = get_body(event->x, event->y, app);
     for (i = 0; i < nbodies; i = i + 1)
     {
@@ -294,10 +271,6 @@ static gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event,
 
 static void close_window(GtkWidget* widget, struct App* app)
 {
-    if (app->surface)
-    {
-        cairo_surface_destroy(app->surface);
-    }
     if (app->timer_id > 0)
     {
         g_source_remove(app->timer_id);
@@ -309,10 +282,7 @@ static void close_window(GtkWidget* widget, struct App* app)
 
 gboolean redraw_timeout(struct App *app)
 {
-    cairo_t *cr;
     int i, j;
-    // int x = 100;
-    // int y = 100;
 
     for (i = 0; i < 5; i = i + 1)
     {
@@ -332,21 +302,6 @@ gboolean redraw_timeout(struct App *app)
         }
     }
 
-    /* Paint to the surface, where we store our state */
-    cr = cairo_create(app->surface);
-    /*
-      //cairo_move_to(cr, x, y);
-      cairo_set_line_width(cr, 1);
-      cairo_arc(cr, x, y, 5, 0, 2*M_PI);
-      cairo_fill (cr);
-
-      x = 150; y = 150;
-      cairo_rectangle (cr, x - 3, y - 3, 6, 6);
-      cairo_fill (cr);
-    */
-
-    clear_surface(app->surface);
-
     int w = 400;
     int minx = INT_MAX, maxx = 0;
     int miny = INT_MAX, maxy = 0;
@@ -355,18 +310,7 @@ gboolean redraw_timeout(struct App *app)
         // assume w = h
         double x = body[i].x[0] * w / Zoom + w / 2.0;
         double y = body[i].x[1] * w / Zoom + w / 2.0;
-        cairo_arc(cr, x, y, 1, 0, 2 * M_PI);
-        cairo_fill(cr);
 
-        app->body_ctls[i].x0 = x;
-        app->body_ctls[i].y0 = y;
-
-        if (app->body_ctls[i].show_tip)
-        {
-            cairo_set_font_size(cr, 13);
-            cairo_move_to(cr, x, y);
-            cairo_show_text(cr, body[i].name);
-        }
         minx = Min(minx, x);
         miny = Min(miny, y);
         maxx = Max(maxx, x);
@@ -377,8 +321,6 @@ gboolean redraw_timeout(struct App *app)
     miny = Max(0, miny-10);
     maxx = maxx + 10;
     maxy = maxy + 10;
-
-    cairo_destroy(cr);
 
     /* Now invalidate the affected region of the drawing area. */
     gtk_widget_queue_draw_area(app->drawing_area, minx, miny, maxx, maxy);
@@ -455,14 +397,22 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         _exit(-1);
     }
     zoom = gtk_gesture_zoom_new (drawing_area);
+    // removed
     g_signal_connect(drawing_area, "draw", G_CALLBACK(draw_cb), app);
-    g_signal_connect(drawing_area, "configure-event", G_CALLBACK(configure_event_cb), app);
+
+    //gtk_drawing_area_set_draw_func (GTK_DRAWING_AREA (drawing_area),
+    //                                draw_cb,
+    //                                app, NULL);
+
+    // moved to GtkEventControllerMotion
     g_signal_connect(drawing_area, "motion-notify-event", G_CALLBACK(motion_notify_event_cb), app);
+    // moved to GtkGestureClick
     g_signal_connect(drawing_area, "button-press-event", G_CALLBACK(button_press_event_cb), app);
+    // moved to GtkEventControllerScroll
+    g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), app);
 
     g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), app);
     g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), app);
-    g_signal_connect(drawing_area, "scroll-event", G_CALLBACK(mouse_scroll), app);
 
     gtk_widget_set_events(drawing_area,
                           gtk_widget_get_events(drawing_area)
