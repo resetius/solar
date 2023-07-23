@@ -2,6 +2,7 @@
 #include <gio/gio.h>
 #include <math.h>
 #include <limits.h>
+#include <locale.h>
 
 double dt = 0.005;
 const double G = 2.92e-6;
@@ -12,35 +13,6 @@ double ZoomInitial = 10.0;
 //typedef float real;
 typedef double real;
 
-struct p
-{
-    real x[3];
-};
-
-struct body
-{
-    real x[3];
-    real v[3];
-    real a[3];
-    real mass;
-    int fixed;
-    char name[100];
-};
-
-struct body body[] = {
-    {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, 333333, 1, "Sun"},
-    {{0, 0.39, 0}, {1.58, 0, 0}, {0, 0, 0}, 0.038, 0, "Mercury"},
-    {{0, 0.72, 0}, {1.17, 0, 0}, {0, 0, 0}, 0.82, 0, "Venus"},
-    {{0, 1, 0}, {1, 0, 0}, {0, 0, 0}, 1, 0, "Earth"},
-    {{0, 1.00256, 0}, {1.03, 0, 0}, {0, 0, 0}, 0.012, 0, "Moon"},
-    {{0, 1.51, 0}, {0.8, 0, 0}, {0, 0, 0}, 0.1, 0, "Mars"},
-    {{0, 5.2, 0}, {0.43, 0, 0}, {0, 0, 0}, 317, 0, "Jupiter"},
-    {{0, 9.3, 0}, {0.32, 0, 0}, {0, 0, 0}, 95, 0, "Saturn"},
-    {{0, 19.3, 0}, {0.23, 0, 0}, {0, 0, 0}, 14.5, 0, "Uranus"},
-    {{0, 30, 0}, {0.18, 0, 0}, {0, 0, 0}, 16.7, 0, "Neptune"}};
-
-const int nbodies = 10;
-
 int Max(int a, int b) {
     return a>b?a:b;
 }
@@ -49,129 +21,20 @@ int Min(int a, int b) {
     return a<b?a:b;
 }
 
-void step_verlet() {
-    int i, j, k;
-    struct p dv_list[nbodies];
-    for (i = 0; i < nbodies; ++i)
-    {
-        struct p new_pos; memset(&new_pos, 0, sizeof(new_pos));
-        for (j = 0; j < 3; j++) {
-            new_pos.x[j] = body[i].x[j] + dt * body[i].v[j] + 0.5*dt*dt*body[i].a[j];
-        }
-        dv_list[i] = new_pos;
-
-        struct p new_a; memset(&new_a, 0, sizeof(new_a));
-        for (j = 0; j < nbodies; j++) {
-            if (i == j) { continue; }
-            double R = 0.0;
-
-            struct p *r1 = &new_pos;
-            struct body *r2 = &body[j];
-            for (k = 0; k < 3; ++k)
-            {
-                R += (r1->x[k] - r2->x[k]) * (r1->x[k] - r2->x[k]);
-            }
-            R = sqrt(R);
-
-            for (k = 0; k < 3; ++k)
-            {
-                new_a.x[k] += G * body[j].mass * (r2->x[k] - r1->x[k]) / R / R / R;
-            }
-        }
-
-        for (j = 0; j < 3; j++) {
-            body[i].v[j] += 0.5 * dt * (new_a.x[j] + body[i].a[j]);
-            body[i].a[j] = new_a.x[j];
-        }
-    }
-
-    for (i = 0; i < nbodies; ++i)
-    {
-        memcpy(body[i].x, dv_list[i].x, sizeof(dv_list[i].x));
-    }
-}
-
-void step()
+struct body
 {
-    int i, j, k;
-    struct p dv_list[nbodies];
-    for (i = 0; i < nbodies; ++i)
-    {
-        struct p dv = {{0, 0, 0}};
-        if (body[i].fixed)
-        {
-            // fixed point
-            for (j = 0; j < 3; ++j)
-            {
-                dv.x[j] = body[i].v[j];
-            }
-            dv_list[i] = dv;
-            continue;
-        }
-
-        for (j = 0; j < nbodies; ++j)
-        {
-            if (i == j)
-            {
-                continue;
-            }
-
-            struct body *r1 = &body[i];
-            struct body *r2 = &body[j];
-            double R = 0.0;
-            for (k = 0; k < 3; ++k)
-            {
-                R += (r1->x[k] - r2->x[k]) * (r1->x[k] - r2->x[k]);
-            }
-            R = sqrt(R);
-
-            for (k = 0; k < 3; ++k)
-            {
-                dv.x[k] += G * body[j].mass * (r2->x[k] - r1->x[k]) / R / R / R;
-            }
-        }
-        dv_list[i] = dv;
-    }
-
-    // change velocity
-    for (i = 0; i < nbodies; ++i)
-    {
-        if (body[i].fixed)
-        {
-            // fixed point
-            continue;
-        }
-
-        for (k = 0; k < 3; ++k)
-        {
-            body[i].v[k] += dt * dv_list[i].x[k];
-        }
-    }
-
-    // change coordinates
-    for (i = 0; i < nbodies; ++i)
-    {
-        if (body[i].fixed)
-        {
-            // fixed point
-            continue;
-        }
-
-        for (k = 0; k < 3; ++k)
-        {
-            body[i].x[k] += dt * body[i].v[k];
-        }
-    }
-}
-
-struct body_ctl
-{
-    double x0, y0;
+    double x0, y0; // surface coord
     int show_tip;
+
+    char name[16];
+    double r[3];
+    double v[3];
+    double m;
 };
 
 struct App {
-    struct body_ctl body_ctls[100];
+    struct body bodies[100];
+
     GtkEntryBuffer* r[3];
     GtkEntryBuffer* v[3];
     int active_body;
@@ -186,7 +49,9 @@ struct App {
     GSubprocess* subprocess;
 
     GInputStream* input;
-    char input_buffer[1024];
+    GDataInputStream* line_input;
+    int header_processed;
+    int nbodies;
 };
 
 /* Redraw the screen from the surface. Note that the ::draw
@@ -196,11 +61,12 @@ struct App {
 static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
 {
     struct App* app = user_data;
-    for (int i = 0; i < nbodies; ++i)
+    for (int i = 0; i < app->nbodies; ++i)
     {
         // assume w = h
-        double x = body[i].x[0] * w / Zoom + w / 2.0;
-        double y = body[i].x[1] * w / Zoom + w / 2.0;
+        struct body* body = &app->bodies[i];
+        double x = body->r[0] * w / Zoom + w / 2.0;
+        double y = body->r[1] * w / Zoom + w / 2.0;
         if (app->active_body == i) {
             cairo_set_source_rgb(cr, 1, 0, 0);
         } else {
@@ -209,10 +75,10 @@ static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_da
         cairo_arc(cr, x, y, 1, 0, 2 * M_PI);
         cairo_fill(cr);
 
-        app->body_ctls[i].x0 = x;
-        app->body_ctls[i].y0 = y;
+        body->x0 = x;
+        body->y0 = y;
 
-        if (app->body_ctls[i].show_tip)
+        if (body->show_tip)
         {
             cairo_set_font_size(cr, 13);
             cairo_move_to(cr, x, y);
@@ -225,10 +91,11 @@ static int get_body(double x, double y, struct App* app) {
     double mindist = -1;
     int argmin = -1;
     int i;
-    for (i = 0; i < nbodies; i = i + 1)
+    for (i = 0; i < app->nbodies; i = i + 1)
     {
-        double dist = (app->body_ctls[i].x0 - x) * (app->body_ctls[i].x0 - x) +
-                      (app->body_ctls[i].y0 - y) * (app->body_ctls[i].y0 - y);
+        struct body* body = &app->bodies[i];
+        double dist = (body->x0 - x) * (body->x0 - x) +
+                      (body->y0 - y) * (body->y0 - y);
         if (argmin < 0 || dist < mindist)
         {
             mindist = dist;
@@ -258,16 +125,15 @@ static void motion_notify_event_cb(GtkEventControllerMotion* self, double x, dou
 {
     int i;
     int argmin = get_body(x, y, app);
-    for (i = 0; i < nbodies; i = i + 1)
+    for (i = 0; i < app->nbodies; i = i + 1)
     {
-        app->body_ctls[i].show_tip = 0;
+        app->bodies[i].show_tip = 0;
     }
     if (argmin >= 0)
     {
-        app->body_ctls[argmin].show_tip = 1;
+        app->bodies[argmin].show_tip = 1;
     }
 }
-
 
 static void close_window(GtkWidget* widget, struct App* app)
 {
@@ -276,8 +142,6 @@ static void close_window(GtkWidget* widget, struct App* app)
         g_source_remove(app->timer_id);
         app->timer_id = 0;
     }
-
-    // gtk_main_quit();
 }
 
 gboolean redraw_timeout(struct App *app)
@@ -287,27 +151,29 @@ gboolean redraw_timeout(struct App *app)
     for (i = 0; i < 5; i = i + 1)
     {
         //step();
-        step_verlet();
+        //step_verlet();
     }
 
     char buf[1024];
     i = app->active_body;
-    for (j = 0; j < 3; j = j + 1)
-    {
-        snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].x[j]);
-        gtk_entry_buffer_set_text(app->r[j], buf, strlen(buf));
-        snprintf(buf, sizeof(buf) - 1, "%.16le", body[i].v[j]);
-        gtk_entry_buffer_set_text(app->v[j], buf, strlen(buf));
+    if (i >= 0 && i < app->nbodies) {
+        for (j = 0; j < 3; j = j + 1)
+        {
+            snprintf(buf, sizeof(buf) - 1, "%.16le", app->bodies[i].r[j]);
+            gtk_entry_buffer_set_text(app->r[j], buf, strlen(buf));
+            snprintf(buf, sizeof(buf) - 1, "%.16le", app->bodies[i].v[j]);
+            gtk_entry_buffer_set_text(app->v[j], buf, strlen(buf));
+        }
     }
 
     int w = 400;
     int minx = INT_MAX, maxx = 0;
     int miny = INT_MAX, maxy = 0;
-    for (i = 0; i < nbodies; ++i)
+    for (i = 0; i < app->nbodies; ++i)
     {
         // assume w = h
-        double x = body[i].x[0] * w / Zoom + w / 2.0;
-        double y = body[i].x[1] * w / Zoom + w / 2.0;
+        double x = app->bodies[i].r[0] * w / Zoom + w / 2.0;
+        double y = app->bodies[i].r[1] * w / Zoom + w / 2.0;
 
         minx = Min(minx, x);
         miny = Min(miny, y);
@@ -366,15 +232,6 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 {
     struct App* app = user_data;
 
-    /*
-    GtkCssProvider *css_provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_resource(css_provider, "/solar/exampleapp/theme.css");
-    gtk_style_context_add_provider_for_screen(
-        gdk_screen_get_default(),
-        GTK_STYLE_PROVIDER(css_provider),
-        GTK_STYLE_PROVIDER_PRIORITY_USER);
-    */
-
     GtkWidget* window = gtk_application_window_new(gapp);
     gtk_window_set_title (GTK_WINDOW (window), "Window");
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
@@ -391,13 +248,8 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     GtkWidget* rbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_append(GTK_BOX(box), rbox);
 
-    const char** strings = malloc((nbodies+1) * sizeof(char*));
-    for (int i = 0; i<nbodies; i=i+1) {
-        strings[i] = body[i].name;
-    }
-    strings[nbodies] = NULL;
+    const char* strings[] = { NULL };
     GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
-    free(strings);
 
     gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
     g_signal_connect(drop_down, "state-flags-changed", G_CALLBACK(active_changed), app);
@@ -456,6 +308,7 @@ void spawn(struct App* app) {
 
     app->subprocess = g_subprocess_newv(&argv[0], G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
+    app->line_input = g_data_input_stream_new(app->input);
 }
 
 void read_child(struct App* app);
@@ -463,21 +316,59 @@ void read_child(struct App* app);
 static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
     struct App* app = user_data;
 
-    gssize size = g_input_stream_read_finish(G_INPUT_STREAM(input), res, NULL);
+    gsize size;
+    char* line = g_data_input_stream_read_line_finish(G_DATA_INPUT_STREAM(input), res, &size, NULL);
 
-    if (size > 0) {
+    if (line) {
+        if (*line == 't') {
+            // skip
+        } else if (*line == '#') {
+            // header
+            struct body* body = &app->bodies[app->nbodies++];
+            sscanf(line, "# %15s %lf", body->name, &body->m);
+        } else if (!app->header_processed) {
+            app->header_processed = 1;
 
-        printf("On new data %s\n", app->input_buffer);
+            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->drop_down)));
+            for (int i = 0; i < app->nbodies; i++) {
+                gtk_string_list_append(strings, app->bodies[i].name);
+            }
+        }
 
+        if (app->header_processed) {
+            // parse line
+            const char* sep = " ";
+            char* p = line;
+            printf("Parse: '%s'\n", line);
+            p = strtok(p, sep); // skip time
+            for (int i = 0; i < app->nbodies; i++) {
+                p = strtok(NULL, sep); app->bodies[i].r[0] = atof(p);
+                p = strtok(NULL, sep); app->bodies[i].r[1] = atof(p);
+                p = strtok(NULL, sep); app->bodies[i].r[2] = atof(p);
+
+                p = strtok(NULL, sep); app->bodies[i].v[0] = atof(p);
+                p = strtok(NULL, sep); app->bodies[i].v[1] = atof(p);
+                p = strtok(NULL, sep); app->bodies[i].v[2] = atof(p);
+
+                printf("%f %f %f %f %f %f\n",
+                       app->bodies[i].r[0],
+                       app->bodies[i].r[1],
+                       app->bodies[i].r[2],
+                       app->bodies[i].v[0],
+                       app->bodies[i].v[1],
+                       app->bodies[i].v[2]);
+            }
+        }
+        free(line); // performance issue
         read_child(app);
     }
 }
 
 void read_child(struct App* app) {
-    g_input_stream_read_async(
-        app->input,
-        app->input_buffer, sizeof(app->input_buffer), 0,
-        NULL, on_new_data, app);
+    g_data_input_stream_read_line_async(
+        app->line_input,
+        /*priority*/ 0, /*cancellable*/ NULL,
+        on_new_data, app);
 }
 
 int main(int argc, char **argv)
@@ -487,6 +378,8 @@ int main(int argc, char **argv)
     int status;
 
     memset(&app, 0, sizeof(app));
+
+    gtk_disable_setlocale();
 
     spawn(&app);
     read_child(&app);
