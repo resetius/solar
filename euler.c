@@ -159,25 +159,42 @@ err:
     exit(1);
 }
 
-void print(struct data* data) {
+void print_header(struct data* data) {
+    // column names
+    printf("t ");
+    for (int i = 0; i < data->nbodies; i++) {
+        for (int j = 0; j < 3; j++) {
+            printf("r%d,%d ", i, j);
+        }
+        for (int j = 0; j < 3; j++) {
+            printf("v%d,%d ", i, j);
+        }
+    }
+    printf("\n");
+    // comment
+    for (int i = 0; i < data->nbodies; i++) {
+        printf("# %s %le\n", data->bodies[i].name, data->bodies[i].m);
+    }
+}
+
+void print(struct data* data, double t) {
+    printf("%e ", t);
     for (int i = 0; i < data->nbodies; i++) {
         printf(
-            "%s %e %e %e %e %e %e %e\n",
-            data->bodies[i].name,
+            "%e %e %e %e %e %e ",
             data->bodies[i].r[0], data->bodies[i].r[1], data->bodies[i].r[2],
-            data->bodies[i].v[0], data->bodies[i].v[1], data->bodies[i].v[2],
-            data->bodies[i].m);
+            data->bodies[i].v[0], data->bodies[i].v[1], data->bodies[i].v[2]);
     }
     printf("\n");
 }
 
 void solve(struct data* data, double T) {
-    print(data);
-
+    print_header(data);
+    print(data, 0);
     int N = T / data->dt;
     for (int i = 0; i < N; i++) {
         euler_next(data);
-        print(data);
+        print(data, (i + 1) * data->dt);
     }
 }
 
