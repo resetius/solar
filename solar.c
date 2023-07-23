@@ -4,22 +4,9 @@
 #include <limits.h>
 #include <locale.h>
 
-double dt = 0.005;
-const double G = 2.92e-6;
 int Stop = 0;
 double Zoom = 10.0;
 double ZoomInitial = 10.0;
-
-//typedef float real;
-typedef double real;
-
-int Max(int a, int b) {
-    return a>b?a:b;
-}
-
-int Min(int a, int b) {
-    return a<b?a:b;
-}
 
 struct body
 {
@@ -52,6 +39,7 @@ struct App {
     GDataInputStream* line_input;
     int header_processed;
     int nbodies;
+    int suspend;
 };
 
 /* Redraw the screen from the surface. Note that the ::draw
@@ -82,7 +70,7 @@ static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_da
         {
             cairo_set_font_size(cr, 13);
             cairo_move_to(cr, x, y);
-            cairo_show_text(cr, body[i].name);
+            cairo_show_text(cr, body->name);
         }
     }
 }
@@ -144,20 +132,14 @@ static void close_window(GtkWidget* widget, struct App* app)
     }
 }
 
-gboolean redraw_timeout(struct App *app)
-{
-    int i, j;
 
-    for (i = 0; i < 5; i = i + 1)
-    {
-        //step();
-        //step_verlet();
-    }
+void read_child(struct App* app);
 
+void update_all(struct App* app) {
     char buf[1024];
-    i = app->active_body;
+    int i = app->active_body;
     if (i >= 0 && i < app->nbodies) {
-        for (j = 0; j < 3; j = j + 1)
+        for (int j = 0; j < 3; j = j + 1)
         {
             snprintf(buf, sizeof(buf) - 1, "%.16le", app->bodies[i].r[j]);
             gtk_entry_buffer_set_text(app->r[j], buf, strlen(buf));
@@ -166,27 +148,15 @@ gboolean redraw_timeout(struct App *app)
         }
     }
 
-    int w = 400;
-    int minx = INT_MAX, maxx = 0;
-    int miny = INT_MAX, maxy = 0;
-    for (i = 0; i < app->nbodies; ++i)
-    {
-        // assume w = h
-        double x = app->bodies[i].r[0] * w / Zoom + w / 2.0;
-        double y = app->bodies[i].r[1] * w / Zoom + w / 2.0;
-
-        minx = Min(minx, x);
-        miny = Min(miny, y);
-        maxx = Max(maxx, x);
-        maxy = Max(maxy, y);
-    }
-
-    minx = Max(0, minx-10);
-    miny = Max(0, miny-10);
-    maxx = maxx + 10;
-    maxy = maxy + 10;
-
     gtk_widget_queue_draw(app->drawing_area);
+}
+
+gboolean redraw_timeout(struct App *app)
+{
+    if (app->header_processed && app->suspend) {
+        app->suspend = 0;
+        read_child(app);
+    }
 
     return app->timer_id > 0;
 }
@@ -303,8 +273,10 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 }
 
 void spawn(struct App* app) {
+//    const gchar* argv[] = {
+//        "./euler.exe", "--input", "2bodies.txt", "--dt", "0.00001", "--T", "0.1", NULL};
     const gchar* argv[] = {
-        "./euler.exe", "--input", "2bodies.txt", "--dt", "0.001", "--T", "0.1", NULL};
+        "./euler.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
 
     app->subprocess = g_subprocess_newv(&argv[0], G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
@@ -333,13 +305,13 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
             for (int i = 0; i < app->nbodies; i++) {
                 gtk_string_list_append(strings, app->bodies[i].name);
             }
+            app->active_body = 0;
         }
 
         if (app->header_processed) {
             // parse line
             const char* sep = " ";
             char* p = line;
-            printf("Parse: '%s'\n", line);
             p = strtok(p, sep); // skip time
             for (int i = 0; i < app->nbodies; i++) {
                 p = strtok(NULL, sep); app->bodies[i].r[0] = atof(p);
@@ -349,18 +321,16 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
                 p = strtok(NULL, sep); app->bodies[i].v[0] = atof(p);
                 p = strtok(NULL, sep); app->bodies[i].v[1] = atof(p);
                 p = strtok(NULL, sep); app->bodies[i].v[2] = atof(p);
-
-                printf("%f %f %f %f %f %f\n",
-                       app->bodies[i].r[0],
-                       app->bodies[i].r[1],
-                       app->bodies[i].r[2],
-                       app->bodies[i].v[0],
-                       app->bodies[i].v[1],
-                       app->bodies[i].v[2]);
             }
+
+            update_all(app);
+            app->suspend = 1;
         }
         free(line); // performance issue
-        read_child(app);
+
+        if (!app->suspend) {
+            read_child(app);
+        }
     }
 }
 
