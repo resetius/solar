@@ -22,6 +22,7 @@ struct App {
     GtkEntryBuffer* r[3];
     GtkEntryBuffer* v[3];
     int active_body;
+    int active_kernel;
 
     GtkWidget* drop_down;
 
@@ -31,6 +32,8 @@ struct App {
 
     double zoom;
     double zoom_initial;
+
+    GtkStringList* kernels;
 
     // child
     GSubprocess* subprocess;
@@ -167,12 +170,16 @@ active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
     app->active_body = active;
 }
 
+void start_kernel(struct App* app);
+
 static void
 ker_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 {
     int active = gtk_drop_down_get_selected(self);
-    //app->active_body = active;
-    printf("ker changed\n");
+    if (active != app->active_kernel) {
+        app->active_kernel = active;
+        start_kernel(app);
+    }
 }
 
 static void
@@ -220,13 +227,15 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_window_set_child(GTK_WINDOW(window), box);
     const char* kernels[] = {
-        "./euler.exe --input 2bodies.txt --dt 0.00001 --T 0.1",
+        "./euler.exe --input 2bodies.txt --dt 0.0001 --T 0.1",
         "./euler.exe --input solar.txt --dt 0.005 --T 1e10",
-        "./solar.exe --input solar.txt --dt 0.005 --T 1e10",
+        "./verlet.exe --input solar.txt --dt 0.005 --T 1e10",
         NULL
     };
     GtkWidget* ker_selector = gtk_drop_down_new_from_strings(kernels);
     g_signal_connect(ker_selector, "state-flags-changed", G_CALLBACK(ker_changed), app);
+    app->kernels = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ker_selector)));
+
     gtk_box_append(GTK_BOX(box), ker_selector);
 
     GtkWidget* bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -292,14 +301,10 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 }
 
 void spawn(struct App* app) {
-//    const gchar* argv[] = {
-//        "./euler.exe", "--input", "2bodies.txt", "--dt", "0.00001", "--T", "0.1", NULL};
-//    const gchar* argv[] = {
-//        "./euler.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
-    const gchar* argv[] = {
-        "./verlet.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
-
-    app->subprocess = g_subprocess_newv(&argv[0], G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    gchar** argv = g_strsplit(
+        gtk_string_list_get_string(app->kernels, app->active_kernel), " ", -1);
+    app->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    g_free(argv);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
     app->line_input = g_data_input_stream_new(app->input);
 }
@@ -334,14 +339,14 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
             const char* sep = " ";
             char* p = line;
             p = strtok(p, sep); // skip time
-            for (int i = 0; i < app->nbodies; i++) {
-                p = strtok(NULL, sep); app->bodies[i].r[0] = atof(p);
-                p = strtok(NULL, sep); app->bodies[i].r[1] = atof(p);
-                p = strtok(NULL, sep); app->bodies[i].r[2] = atof(p);
+            for (int i = 0; p && i < app->nbodies; i++) {
+                if ((p = strtok(NULL, sep))) app->bodies[i].r[0] = atof(p);
+                if ((p = strtok(NULL, sep))) app->bodies[i].r[1] = atof(p);
+                if ((p = strtok(NULL, sep))) app->bodies[i].r[2] = atof(p);
 
-                p = strtok(NULL, sep); app->bodies[i].v[0] = atof(p);
-                p = strtok(NULL, sep); app->bodies[i].v[1] = atof(p);
-                p = strtok(NULL, sep); app->bodies[i].v[2] = atof(p);
+                if ((p = strtok(NULL, sep))) app->bodies[i].v[0] = atof(p);
+                if ((p = strtok(NULL, sep))) app->bodies[i].v[1] = atof(p);
+                if ((p = strtok(NULL, sep))) app->bodies[i].v[2] = atof(p);
             }
 
             update_all(app);
@@ -362,6 +367,30 @@ void read_child(struct App* app) {
         on_new_data, app);
 }
 
+void start_kernel(struct App* app) {
+    if (app->subprocess) {
+        g_subprocess_force_exit(app->subprocess);
+        //g_free(app->subprocess);
+        app->subprocess = NULL;
+
+        //g_input_stream_close(G_INPUT_STREAM(app->line_input), NULL, NULL);
+        //g_input_stream_close(app->input, NULL, NULL);
+
+        //g_free(app->input);
+        //g_free(app->line_input);
+    }
+
+    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->drop_down)));
+    gtk_string_list_splice(strings, 0, app->nbodies, NULL);
+    app->nbodies = 0;
+    app->active_body = -1;
+    app->header_processed = 0;
+    app->suspend = 0;
+
+    spawn(app);
+    read_child(app);
+}
+
 int main(int argc, char **argv)
 {
     struct App app;
@@ -370,11 +399,9 @@ int main(int argc, char **argv)
 
     memset(&app, 0, sizeof(app));
     app.zoom = app.zoom_initial = 0.1;
+    app.active_kernel = -1;
 
     gtk_disable_setlocale();
-
-    spawn(&app);
-    read_child(&app);
 
     gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
