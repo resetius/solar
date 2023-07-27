@@ -20,7 +20,7 @@ endif
 
 COMPILER ?= $(CC)
 
-All: solar.exe euler.exe
+All: solar.exe euler.exe verlet.exe
 
 clean:
 		rm -f *.o *.exe
@@ -29,6 +29,9 @@ solar.exe: solar.o Makefile
 		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4,$(GIO)` -lm -o $@
 
 euler.exe: euler.o Makefile
+		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4$(GIO)` -lm -o $@
+
+verlet.exe: verlet.o Makefile
 		$(COMPILER) $< $(CFLAGS) `pkg-config --libs gtk4,$(GIO)` -lm -o $@
 
 %.exe: %.o Makefile
