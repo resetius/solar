@@ -39,6 +39,7 @@ struct App {
     GSubprocess* subprocess;
 
     GInputStream* input;
+    GCancellable* cancel_read;
     GDataInputStream* line_input;
     int header_processed;
     int suspend;
@@ -125,6 +126,23 @@ static void motion_notify_event_cb(GtkEventControllerMotion* self, double x, dou
     }
 }
 
+void stop_kernel(struct App* app) {
+    if (app->subprocess) {
+        g_cancellable_cancel(app->cancel_read);
+        g_subprocess_force_exit(app->subprocess);
+
+        g_input_stream_close(G_INPUT_STREAM(app->line_input), NULL, NULL);
+        g_input_stream_close(app->input, NULL, NULL);
+
+        g_object_unref(app->input);
+        g_object_unref(app->line_input);
+        g_object_unref(app->cancel_read);
+        // g_object_unref(app->subprocess);
+
+        app->subprocess = NULL;
+    }
+}
+
 static void close_window(GtkWidget* widget, struct App* app)
 {
     if (app->timer_id > 0)
@@ -132,6 +150,8 @@ static void close_window(GtkWidget* widget, struct App* app)
         g_source_remove(app->timer_id);
         app->timer_id = 0;
     }
+
+    stop_kernel(app);
 }
 
 
@@ -307,6 +327,7 @@ void spawn(struct App* app) {
     g_free(argv);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
     app->line_input = g_data_input_stream_new(app->input);
+    app->cancel_read = g_cancellable_new();
 }
 
 void read_child(struct App* app);
@@ -363,22 +384,12 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
 void read_child(struct App* app) {
     g_data_input_stream_read_line_async(
         app->line_input,
-        /*priority*/ 0, /*cancellable*/ NULL,
+        /*priority*/ 0, app->cancel_read,
         on_new_data, app);
 }
 
 void start_kernel(struct App* app) {
-    if (app->subprocess) {
-        g_subprocess_force_exit(app->subprocess);
-        //g_free(app->subprocess);
-        app->subprocess = NULL;
-
-        //g_input_stream_close(G_INPUT_STREAM(app->line_input), NULL, NULL);
-        //g_input_stream_close(app->input, NULL, NULL);
-
-        //g_free(app->input);
-        //g_free(app->line_input);
-    }
+    stop_kernel(app);
 
     GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->drop_down)));
     gtk_string_list_splice(strings, 0, app->nbodies, NULL);
