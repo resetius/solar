@@ -156,12 +156,12 @@ void run_test() {
     double err2 = kepler(0.0001);
     double err3 = kepler(0.00001);
     printf("%f %f %f\n", err1, err2, err3);
-    if (err1 / 10 < err2) {
-        printf("Error1\n");
+    if (err1 / 97 < err2) {
+        printf("Error1 %f\n", err1/err2);
         exit(1);
     }
-    if (err1 / 100 < err3) {
-        printf("Error2\n");
+    if (err1 / 10000 < err3) {
+        printf("Error2 %f\n", err1/err3);
         exit(2);
     }
     printf("Ok\n");
