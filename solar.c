@@ -168,6 +168,14 @@ active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 }
 
 static void
+ker_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+{
+    int active = gtk_drop_down_get_selected(self);
+    //app->active_body = active;
+    printf("ker changed\n");
+}
+
+static void
 zoom_begin_cb (GtkGesture* gesture,
                GdkEventSequence* sequence,
                struct App* app)
@@ -209,13 +217,25 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_widget_set_vexpand(drawing_area, TRUE);
     gtk_widget_set_hexpand(drawing_area, TRUE);
 
-    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_window_set_child(GTK_WINDOW(window), box);
+    const char* kernels[] = {
+        "./euler.exe --input 2bodies.txt --dt 0.00001 --T 0.1",
+        "./euler.exe --input solar.txt --dt 0.005 --T 1e10",
+        "./solar.exe --input solar.txt --dt 0.005 --T 1e10",
+        NULL
+    };
+    GtkWidget* ker_selector = gtk_drop_down_new_from_strings(kernels);
+    g_signal_connect(ker_selector, "state-flags-changed", G_CALLBACK(ker_changed), app);
+    gtk_box_append(GTK_BOX(box), ker_selector);
 
-    gtk_box_append(GTK_BOX(box), drawing_area);
+    GtkWidget* bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_append(GTK_BOX(box), bbox);
+
+    gtk_box_append(GTK_BOX(bbox), drawing_area);
 
     GtkWidget* rbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_append(GTK_BOX(box), rbox);
+    gtk_box_append(GTK_BOX(bbox), rbox);
 
     const char* strings[] = { NULL };
     GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
