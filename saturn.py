@@ -8,7 +8,7 @@ print(1)
 print(N+1)
 print("Saturn 0 0 0 0 0 0 %f" % (M)) 
 for i in range(N):
-    m = 1.0/M
+    m = 1.0/N
     alpha = 2*math.pi*random.random()
     r = 1+random.random()*0.2-0.1
     x = r * math.cos(alpha)
