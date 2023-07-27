@@ -247,7 +247,8 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_window_set_child(GTK_WINDOW(window), box);
     const char* kernels[] = {
-        "./euler.exe --input 2bodies.txt --dt 0.0001 --T 0.1",
+        "./euler.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
+        "./verlet.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
         "./euler.exe --input solar.txt --dt 0.005 --T 1e10",
         "./verlet.exe --input solar.txt --dt 0.005 --T 1e10",
         NULL
@@ -315,7 +316,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     g_signal_connect(window, "destroy", G_CALLBACK(close_window), app);
 
     app->drawing_area = drawing_area;
-    app->timer_id = g_timeout_add(100, (GSourceFunc)redraw_timeout, app);
+    app->timer_id = g_timeout_add(16, (GSourceFunc)redraw_timeout, app);
 
     gtk_window_present(GTK_WINDOW(window));
 }
