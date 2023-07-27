@@ -238,6 +238,7 @@ void solve(struct data* data, double T) {
     print_header(data);
     print(data, 0);
     int N = T / data->dt;
+    verlet_init(data);
     for (int i = 0; i < N; i++) {
         verlet_next(data);
         print(data, (i + 1) * data->dt);
