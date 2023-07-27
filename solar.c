@@ -17,7 +17,7 @@ struct body
 
 struct App {
     int nbodies;
-    struct body bodies[100];
+    struct body bodies[1000];
 
     GtkEntryBuffer* r[3];
     GtkEntryBuffer* v[3];
@@ -251,6 +251,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         "./verlet.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
         "./euler.exe --input solar.txt --dt 0.005 --T 1e10",
         "./verlet.exe --input solar.txt --dt 0.005 --T 1e10",
+        "./verlet.exe --input saturn.txt --dt 0.00001 --T 1e10",
         NULL
     };
     GtkWidget* ker_selector = gtk_drop_down_new_from_strings(kernels);
