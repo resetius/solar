@@ -4,10 +4,6 @@
 #include <limits.h>
 #include <locale.h>
 
-int Stop = 0;
-double Zoom = 10.0;
-double ZoomInitial = 10.0;
-
 struct body
 {
     double x0, y0; // surface coord
@@ -20,6 +16,7 @@ struct body
 };
 
 struct App {
+    int nbodies;
     struct body bodies[100];
 
     GtkEntryBuffer* r[3];
@@ -32,13 +29,15 @@ struct App {
 
     guint timer_id;
 
+    double zoom;
+    double zoom_initial;
+
     // child
     GSubprocess* subprocess;
 
     GInputStream* input;
     GDataInputStream* line_input;
     int header_processed;
-    int nbodies;
     int suspend;
 };
 
@@ -53,8 +52,8 @@ static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_da
     {
         // assume w = h
         struct body* body = &app->bodies[i];
-        double x = body->r[0] * w / Zoom + w / 2.0;
-        double y = body->r[1] * w / Zoom + w / 2.0;
+        double x = body->r[0] * w * app->zoom + w / 2.0;
+        double y = body->r[1] * w * app->zoom + w / 2.0;
         if (app->active_body == i) {
             cairo_set_source_rgb(cr, 1, 0, 0);
         } else {
@@ -169,19 +168,19 @@ active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 }
 
 static void
-zoom_begin_cb (GtkGesture       *gesture,
-               GdkEventSequence *sequence,
-               struct App         *app)
+zoom_begin_cb (GtkGesture* gesture,
+               GdkEventSequence* sequence,
+               struct App* app)
 {
-    ZoomInitial = Zoom;
+    app->zoom_initial = app->zoom;
 }
 
 static void
-zoom_scale_changed_cb (GtkGestureZoom *z,
-                       gdouble         scale,
-                       struct App       *app)
+zoom_scale_changed_cb (GtkGestureZoom* z,
+                       gdouble scale,
+                       struct App* app)
 {
-    Zoom = ZoomInitial * 1./scale;
+    app->zoom = app->zoom_initial * scale;
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 }
 
@@ -191,9 +190,9 @@ static void mouse_scroll(
     struct App* app)
 {
     if (dy > 0) {
-        Zoom = Zoom * 1.1;
+        app->zoom /= 1.1;
     } else if (dy < 0) {
-        Zoom = Zoom * 0.9;
+        app->zoom *= 1.1;
     }
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 }
@@ -275,8 +274,10 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 void spawn(struct App* app) {
 //    const gchar* argv[] = {
 //        "./euler.exe", "--input", "2bodies.txt", "--dt", "0.00001", "--T", "0.1", NULL};
+//    const gchar* argv[] = {
+//        "./euler.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
     const gchar* argv[] = {
-        "./euler.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
+        "./verlet.exe", "--input", "solar.txt", "--dt", "0.005", "--T", "1e10", NULL};
 
     app->subprocess = g_subprocess_newv(&argv[0], G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
@@ -348,6 +349,7 @@ int main(int argc, char **argv)
     int status;
 
     memset(&app, 0, sizeof(app));
+    app.zoom = app.zoom_initial = 0.1;
 
     gtk_disable_setlocale();
 
