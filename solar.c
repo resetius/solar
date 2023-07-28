@@ -234,6 +234,22 @@ static void mouse_scroll(
 
 GtkWidget* info_widget(struct App* app) {
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    const char* methods[] = {"Euler", "Verlet", NULL};
+    gtk_box_append(GTK_BOX(box), gtk_label_new("Method:"));
+    GtkWidget* methods_drop_down = gtk_drop_down_new_from_strings(methods);
+    gtk_box_append(GTK_BOX(box), methods_drop_down);
+
+    gtk_box_append(GTK_BOX(box), gtk_label_new("Input:"));
+    gtk_box_append(GTK_BOX(box), gtk_entry_new());
+
+    gtk_box_append(GTK_BOX(box), gtk_label_new("dt:"));
+    gtk_box_append(GTK_BOX(box), gtk_spin_button_new_with_range(0.0000001, 0.1, 0.00001));
+
+    gtk_box_append(GTK_BOX(box), gtk_label_new("T:"));
+    gtk_box_append(GTK_BOX(box), gtk_spin_button_new_with_range(0.1, 1e10, 1));
+
+    gtk_box_append(GTK_BOX(box), gtk_label_new("Info:"));
+
     const char* strings[] = { NULL };
     GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
 
