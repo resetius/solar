@@ -57,7 +57,7 @@ static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_da
         // assume w = h
         struct body* body = &app->bodies[i];
         double x = body->r[0] * w * app->zoom + w / 2.0;
-        double y = body->r[1] * w * app->zoom + w / 2.0;
+        double y = body->r[1] * w * app->zoom + h / 2.0;
         if (app->active_body == i) {
             cairo_set_source_rgb(cr, 1, 0, 0);
         } else {
@@ -232,6 +232,39 @@ static void mouse_scroll(
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 }
 
+GtkWidget* info_widget(struct App* app) {
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    const char* strings[] = { NULL };
+    GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
+
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
+    g_signal_connect(drop_down, "state-flags-changed", G_CALLBACK(active_changed), app);
+    gtk_box_append(GTK_BOX(box), drop_down);
+
+    for (int i = 0; i < 3; i++) {
+        GtkWidget* x = gtk_label_new("-");
+        gtk_box_append(GTK_BOX(box), x);
+        app->r[i] = GTK_LABEL(x);
+        gtk_label_set_justify(app->r[i], GTK_JUSTIFY_LEFT);
+        gtk_label_set_width_chars(app->r[i], 30);
+        gtk_label_set_use_markup(app->r[i], TRUE);
+    }
+    for (int i = 0; i < 3; i++) {
+        GtkWidget* vx = gtk_label_new("-");
+        gtk_box_append(GTK_BOX(box), vx);
+        app->v[i] = GTK_LABEL(vx);
+        gtk_label_set_justify(app->v[i], GTK_JUSTIFY_LEFT);
+        gtk_label_set_width_chars(app->v[i], 30);
+        gtk_label_set_use_markup(app->v[i], TRUE);
+    }
+    app->drop_down = drop_down;
+
+    gtk_widget_set_halign(box, GTK_ALIGN_END);
+    gtk_widget_set_valign(box, GTK_ALIGN_START);
+
+    return box;
+}
+
 static void activate(GtkApplication *gapp, gpointer user_data)
 {
     struct App* app = user_data;
@@ -260,38 +293,15 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 
     gtk_box_append(GTK_BOX(box), ker_selector);
 
-    GtkWidget* bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_append(GTK_BOX(box), bbox);
+    GtkWidget* overlay = gtk_overlay_new();
+    // GtkWidget* bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_append(GTK_BOX(box), overlay);
 
-    gtk_box_append(GTK_BOX(bbox), drawing_area);
+    gtk_overlay_set_child(GTK_OVERLAY(overlay), drawing_area);
+    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), info_widget(app));
 
-    GtkWidget* rbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_append(GTK_BOX(bbox), rbox);
-
-    const char* strings[] = { NULL };
-    GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
-
-    gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
-    g_signal_connect(drop_down, "state-flags-changed", G_CALLBACK(active_changed), app);
-    gtk_box_append(GTK_BOX(rbox), drop_down);
-
-    for (int i = 0; i < 3; i++) {
-        GtkWidget* x = gtk_label_new("-");
-        gtk_box_append(GTK_BOX(rbox), x);
-        app->r[i] = GTK_LABEL(x);
-        gtk_label_set_justify(app->r[i], GTK_JUSTIFY_LEFT);
-        gtk_label_set_width_chars(app->r[i], 30);
-        gtk_label_set_use_markup(app->r[i], TRUE);
-    }
-    for (int i = 0; i < 3; i++) {
-        GtkWidget* vx = gtk_label_new("-");
-        gtk_box_append(GTK_BOX(rbox), vx);
-        app->v[i] = GTK_LABEL(vx);
-        gtk_label_set_justify(app->v[i], GTK_JUSTIFY_LEFT);
-        gtk_label_set_width_chars(app->v[i], 30);
-        gtk_label_set_use_markup(app->v[i], TRUE);
-    }
-    app->drop_down = drop_down;
+    //gtk_box_append(GTK_BOX(bbox), drawing_area);
+    //gtk_box_append(GTK_BOX(bbox), info_widget(app));
 
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw_cb, app, NULL);
 
