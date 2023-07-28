@@ -19,8 +19,8 @@ struct App {
     int nbodies;
     struct body bodies[1000];
 
-    GtkEntryBuffer* r[3];
-    GtkEntryBuffer* v[3];
+    GtkLabel* r[3];
+    GtkLabel* v[3];
     int active_body;
     int active_kernel;
 
@@ -163,10 +163,10 @@ void update_all(struct App* app) {
     if (i >= 0 && i < app->nbodies) {
         for (int j = 0; j < 3; j = j + 1)
         {
-            snprintf(buf, sizeof(buf) - 1, "%.16le", app->bodies[i].r[j]);
-            gtk_entry_buffer_set_text(app->r[j], buf, strlen(buf));
-            snprintf(buf, sizeof(buf) - 1, "%.16le", app->bodies[i].v[j]);
-            gtk_entry_buffer_set_text(app->v[j], buf, strlen(buf));
+            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .16le</tt>", 'x'+j, app->bodies[i].r[j]);
+            gtk_label_set_label(app->r[j], buf);
+            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .16le</tt>", 'x'+j, app->bodies[i].v[j]);
+            gtk_label_set_label(app->v[j], buf);
         }
     }
 
@@ -276,14 +276,20 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_box_append(GTK_BOX(rbox), drop_down);
 
     for (int i = 0; i < 3; i++) {
-        GtkWidget* x = gtk_entry_new();
+        GtkWidget* x = gtk_label_new("-");
         gtk_box_append(GTK_BOX(rbox), x);
-        app->r[i] = gtk_entry_get_buffer(GTK_ENTRY(x));
+        app->r[i] = GTK_LABEL(x);
+        gtk_label_set_justify(app->r[i], GTK_JUSTIFY_LEFT);
+        gtk_label_set_width_chars(app->r[i], 30);
+        gtk_label_set_use_markup(app->r[i], TRUE);
     }
     for (int i = 0; i < 3; i++) {
-        GtkWidget* vx = gtk_entry_new();
+        GtkWidget* vx = gtk_label_new("-");
         gtk_box_append(GTK_BOX(rbox), vx);
-        app->v[i] = gtk_entry_get_buffer(GTK_ENTRY(vx));
+        app->v[i] = GTK_LABEL(vx);
+        gtk_label_set_justify(app->v[i], GTK_JUSTIFY_LEFT);
+        gtk_label_set_width_chars(app->v[i], 30);
+        gtk_label_set_use_markup(app->v[i], TRUE);
     }
     app->drop_down = drop_down;
 
