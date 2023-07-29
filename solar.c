@@ -292,10 +292,12 @@ static void mouse_scroll(
     gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
 }
 
-GtkWidget* info_widget(struct App* app) {
+GtkWidget* control_widget(struct App* app) {
+    GtkWidget* frame = gtk_frame_new("Controls");
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 
-    gtk_box_append(GTK_BOX(box), gtk_label_new("Presets:"));
+    gtk_frame_set_child(GTK_FRAME(frame), box);
+    gtk_box_append(GTK_BOX(box), gtk_label_new("Preset:"));
     const char* presets[] = {"2 Bodies", "Solar", "Saturn", NULL};
     GtkWidget* preset_selector = gtk_drop_down_new_from_strings(presets);
     g_signal_connect(preset_selector, "state-flags-changed", G_CALLBACK(preset_changed), app);
@@ -321,7 +323,13 @@ GtkWidget* info_widget(struct App* app) {
     g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), app);
     gtk_box_append(GTK_BOX(box), dt);
 
-    gtk_box_append(GTK_BOX(box), gtk_label_new("Info:"));
+    return frame;
+}
+
+GtkWidget* info_widget(struct App* app) {
+    GtkWidget* frame = gtk_frame_new("Info");
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_frame_set_child(GTK_FRAME(frame), box);
 
     const char* strings[] = { NULL };
     GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
@@ -348,6 +356,15 @@ GtkWidget* info_widget(struct App* app) {
     }
     app->drop_down = drop_down;
 
+    return frame;
+}
+
+GtkWidget* right_pane(struct App* app) {
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+    gtk_box_append(GTK_BOX(box), control_widget(app));
+    gtk_box_append(GTK_BOX(box), info_widget(app));
+
     gtk_widget_set_halign(box, GTK_ALIGN_END);
     gtk_widget_set_valign(box, GTK_ALIGN_START);
 
@@ -366,21 +383,12 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_widget_set_vexpand(drawing_area, TRUE);
     gtk_widget_set_hexpand(drawing_area, TRUE);
 
-    const char* kernels[] = {
-        "./euler.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
-        "./verlet.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
-        "./euler.exe --input solar.txt --dt 0.005 --T 1e10",
-        "./verlet.exe --input solar.txt --dt 0.005 --T 1e10",
-        "./verlet.exe --input saturn.txt --dt 0.00001 --T 1e10",
-        NULL
-    };
-
     GtkWidget* overlay = gtk_overlay_new();
 
     gtk_window_set_child(GTK_WINDOW(window), overlay);
 
     gtk_overlay_set_child(GTK_OVERLAY(overlay), drawing_area);
-    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), info_widget(app));
+    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), right_pane(app));
 
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw_cb, app, NULL);
 
@@ -525,6 +533,7 @@ int main(int argc, char **argv)
     memset(&app, 0, sizeof(app));
     app.zoom = app.zoom_initial = 0.1;
 
+    app.active_preset = -1;
     app.method = -1;
     app.input_file = strdup("2bodies.txt");
     app.dt = 1e-5;
