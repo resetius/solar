@@ -35,6 +35,11 @@ struct App {
 
     GtkStringList* kernels;
 
+    // kernel settings
+    int method;
+    char* input_file;
+    double dt;
+
     // child
     GSubprocess* subprocess;
 
@@ -163,9 +168,9 @@ void update_all(struct App* app) {
     if (i >= 0 && i < app->nbodies) {
         for (int j = 0; j < 3; j = j + 1)
         {
-            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .16le</tt>", 'x'+j, app->bodies[i].r[j]);
+            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .8le</tt>", 'x'+j, app->bodies[i].r[j]);
             gtk_label_set_label(app->r[j], buf);
-            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .16le</tt>", 'x'+j, app->bodies[i].v[j]);
+            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .8le</tt>", 'x'+j, app->bodies[i].v[j]);
             gtk_label_set_label(app->v[j], buf);
         }
     }
@@ -198,6 +203,15 @@ ker_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
     int active = gtk_drop_down_get_selected(self);
     if (active != app->active_kernel) {
         app->active_kernel = active;
+        start_kernel(app);
+    }
+}
+
+void method_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+{
+    int active = gtk_drop_down_get_selected(self);
+    if (active != app->method) {
+        app->method = active;
         start_kernel(app);
     }
 }
@@ -236,8 +250,9 @@ GtkWidget* info_widget(struct App* app) {
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     const char* methods[] = {"Euler", "Verlet", NULL};
     gtk_box_append(GTK_BOX(box), gtk_label_new("Method:"));
-    GtkWidget* methods_drop_down = gtk_drop_down_new_from_strings(methods);
-    gtk_box_append(GTK_BOX(box), methods_drop_down);
+    GtkWidget* method_selector = gtk_drop_down_new_from_strings(methods);
+    g_signal_connect(method_selector, "state-flags-changed", G_CALLBACK(method_changed), app);
+    gtk_box_append(GTK_BOX(box), method_selector);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("Input:"));
     gtk_box_append(GTK_BOX(box), gtk_entry_new());
@@ -310,14 +325,10 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_box_append(GTK_BOX(box), ker_selector);
 
     GtkWidget* overlay = gtk_overlay_new();
-    // GtkWidget* bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_box_append(GTK_BOX(box), overlay);
 
     gtk_overlay_set_child(GTK_OVERLAY(overlay), drawing_area);
     gtk_overlay_add_overlay(GTK_OVERLAY(overlay), info_widget(app));
-
-    //gtk_box_append(GTK_BOX(bbox), drawing_area);
-    //gtk_box_append(GTK_BOX(bbox), info_widget(app));
 
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw_cb, app, NULL);
 
@@ -355,10 +366,27 @@ static void activate(GtkApplication *gapp, gpointer user_data)
 }
 
 void spawn(struct App* app) {
-    gchar** argv = g_strsplit(
-        gtk_string_list_get_string(app->kernels, app->active_kernel), " ", -1);
+    //gchar** argv = g_strsplit(
+    //    gtk_string_list_get_string(app->kernels, app->active_kernel), " ", -1);
+
+    const gchar* exe = app->method == 0
+        ? "./euler.exe"
+        : "./verlet.exe";
+    gchar dt[40];
+    snprintf(dt, sizeof(dt) - 1, "%.16e", app->dt);
+    const gchar* argv[] = {
+        exe,
+        "--input", app->input_file,
+        "--dt", dt,
+        "--T", "1e20",
+        NULL};
+    printf("run\n");
+    int i = 0;
+    while (argv[i] != 0) {
+        printf("%s\n", argv[i++]);
+    }
     app->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
-    g_free(argv);
+    //g_free(argv);
     app->input = g_subprocess_get_stdout_pipe(app->subprocess);
     app->line_input = g_data_input_stream_new(app->input);
     app->cancel_read = g_cancellable_new();
@@ -445,6 +473,10 @@ int main(int argc, char **argv)
     memset(&app, 0, sizeof(app));
     app.zoom = app.zoom_initial = 0.1;
     app.active_kernel = -1;
+
+    app.method = 0;
+    app.input_file = strdup("2bodies.txt");
+    app.dt = 1e-5;
 
     gtk_disable_setlocale();
 
