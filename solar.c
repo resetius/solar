@@ -23,7 +23,7 @@ struct preset {
     double dt;
 };
 
-struct App {
+struct context {
     int nbodies;
     struct body bodies[1000];
 
@@ -64,16 +64,16 @@ struct App {
     int suspend;
 };
 
-void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
+void draw(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
 {
-    struct App* app = user_data;
-    for (int i = 0; i < app->nbodies; ++i)
+    struct context* ctx = user_data;
+    for (int i = 0; i < ctx->nbodies; ++i)
     {
         // assume w = h
-        struct body* body = &app->bodies[i];
-        double x = body->r[0] * w * app->zoom + w / 2.0;
-        double y = body->r[1] * w * app->zoom + h / 2.0;
-        if (app->active_body == i) {
+        struct body* body = &ctx->bodies[i];
+        double x = body->r[0] * w * ctx->zoom + w / 2.0;
+        double y = body->r[1] * w * ctx->zoom + h / 2.0;
+        if (ctx->active_body == i) {
             cairo_set_source_rgb(cr, 1, 0, 0);
         } else {
             cairo_set_source_rgb(cr, 0, 0, 0);
@@ -93,13 +93,13 @@ void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
     }
 }
 
-static int get_body(double x, double y, struct App* app) {
+int get_body(double x, double y, struct context* ctx) {
     double mindist = -1;
     int argmin = -1;
     int i;
-    for (i = 0; i < app->nbodies; i = i + 1)
+    for (i = 0; i < ctx->nbodies; i = i + 1)
     {
-        struct body* body = &app->bodies[i];
+        struct body* body = &ctx->bodies[i];
         double dist = (body->x0 - x) * (body->x0 - x) +
                       (body->y0 - y) * (body->y0 - y);
         if (argmin < 0 || dist < mindist)
@@ -116,173 +116,173 @@ static int get_body(double x, double y, struct App* app) {
     }
 }
 
-static void button_press_event_cb(GtkGestureClick* self, int npress, double x, double y, struct App* app)
+void button_press(GtkGestureClick* self, int npress, double x, double y, struct context* ctx)
 {
-    int argmin = get_body(x, y, app);
-    if (argmin >= 0)
+    int index = get_body(x, y, ctx);
+    if (index >= 0)
     {
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->body_selector), argmin);
-        app->active_body = argmin;
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(ctx->body_selector), index);
+        ctx->active_body = index;
     }
 }
 
 
-static void motion_notify_event_cb(GtkEventControllerMotion* self, double x, double y, struct App* app)
+void motion_notify(GtkEventControllerMotion* self, double x, double y, struct context* ctx)
 {
     int i;
-    int argmin = get_body(x, y, app);
-    for (i = 0; i < app->nbodies; i = i + 1)
+    int argmin = get_body(x, y, ctx);
+    for (i = 0; i < ctx->nbodies; i = i + 1)
     {
-        app->bodies[i].show_tip = 0;
+        ctx->bodies[i].show_tip = 0;
     }
     if (argmin >= 0)
     {
-        app->bodies[argmin].show_tip = 1;
+        ctx->bodies[argmin].show_tip = 1;
     }
 }
 
-void stop_kernel(struct App* app) {
-    if (app->subprocess) {
-        g_cancellable_cancel(app->cancel_read);
-        g_subprocess_force_exit(app->subprocess);
+void stop_kernel(struct context* ctx) {
+    if (ctx->subprocess) {
+        g_cancellable_cancel(ctx->cancel_read);
+        g_subprocess_force_exit(ctx->subprocess);
 
-        g_input_stream_close(G_INPUT_STREAM(app->line_input), NULL, NULL);
-        g_input_stream_close(app->input, NULL, NULL);
+        g_input_stream_close(G_INPUT_STREAM(ctx->line_input), NULL, NULL);
+        g_input_stream_close(ctx->input, NULL, NULL);
 
-        g_object_unref(app->input);
-        g_object_unref(app->line_input);
-        g_object_unref(app->cancel_read);
-        // g_object_unref(app->subprocess);
+        g_object_unref(ctx->input);
+        g_object_unref(ctx->line_input);
+        g_object_unref(ctx->cancel_read);
+        // g_object_unref(ctx->subprocess);
 
-        app->subprocess = NULL;
+        ctx->subprocess = NULL;
     }
 }
 
-static void close_window(GtkWidget* widget, struct App* app)
+void close_window(GtkWidget* widget, struct context* ctx)
 {
-    if (app->timer_id > 0)
+    if (ctx->timer_id > 0)
     {
-        g_source_remove(app->timer_id);
-        app->timer_id = 0;
+        g_source_remove(ctx->timer_id);
+        ctx->timer_id = 0;
     }
 
-    stop_kernel(app);
+    stop_kernel(ctx);
 }
 
 
-void read_child(struct App* app);
+void read_child(struct context* ctx);
 
-void update_all(struct App* app) {
+void update_all(struct context* ctx) {
     char buf[1024];
-    int i = app->active_body;
-    if (i >= 0 && i < app->nbodies) {
+    int i = ctx->active_body;
+    if (i >= 0 && i < ctx->nbodies) {
         for (int j = 0; j < 3; j = j + 1)
         {
-            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .8le</tt>", 'x'+j, app->bodies[i].r[j]);
-            gtk_label_set_label(app->r[j], buf);
-            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .8le</tt>", 'x'+j, app->bodies[i].v[j]);
-            gtk_label_set_label(app->v[j], buf);
+            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].r[j]);
+            gtk_label_set_label(ctx->r[j], buf);
+            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].v[j]);
+            gtk_label_set_label(ctx->v[j], buf);
         }
     }
 
-    gtk_widget_queue_draw(app->drawing_area);
+    gtk_widget_queue_draw(ctx->drawing_area);
 }
 
-gboolean redraw_timeout(struct App *app)
+gboolean redraw_timeout(struct context* ctx)
 {
-    if (app->header_processed && app->suspend) {
-        app->suspend = 0;
-        read_child(app);
+    if (ctx->header_processed && ctx->suspend) {
+        ctx->suspend = 0;
+        read_child(ctx);
     }
 
-    return app->timer_id > 0;
+    return ctx->timer_id > 0;
 }
 
 static void
-active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+active_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
 {
     int active = gtk_drop_down_get_selected(self);
-    app->active_body = active;
+    ctx->active_body = active;
 }
 
-void start_kernel(struct App* app);
+void start_kernel(struct context* ctx);
 
-void method_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+void method_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
 {
     int active = gtk_drop_down_get_selected(self);
-    if (active != app->method) {
-        app->method = active;
-        start_kernel(app);
+    if (active != ctx->method) {
+        ctx->method = active;
+        start_kernel(ctx);
     }
 }
 
-void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
 {
     int active = gtk_drop_down_get_selected(self);
-    if (active != app->active_preset) {
-        app->active_preset = active;
-        struct preset* preset = &app->presets[active];
-        app->method = preset->method;
-        app->dt = preset->dt;
-        free(app->input_file);
-        app->input_file = strdup(preset->input_file);
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->method_selector), preset->method);
-        gtk_spin_button_set_value(GTK_SPIN_BUTTON(app->dt_selector), preset->dt);
-        gtk_entry_buffer_set_text(app->input_file_entry, preset->input_file, strlen(preset->input_file));
-        start_kernel(app);
+    if (active != ctx->active_preset) {
+        ctx->active_preset = active;
+        struct preset* preset = &ctx->presets[active];
+        ctx->method = preset->method;
+        ctx->dt = preset->dt;
+        free(ctx->input_file);
+        ctx->input_file = strdup(preset->input_file);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(ctx->method_selector), preset->method);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctx->dt_selector), preset->dt);
+        gtk_entry_buffer_set_text(ctx->input_file_entry, preset->input_file, strlen(preset->input_file));
+        start_kernel(ctx);
     }
 }
 
-void input_file_changed(GtkEntry* self, struct App* app) {
+void input_file_changed(GtkEntry* self, struct context* ctx) {
     GtkEntryBuffer* buffer = gtk_entry_get_buffer(self);
     const char* text = gtk_entry_buffer_get_text(buffer);
-    if (strcmp(text, app->input_file)) {
-        free(app->input_file);
-        app->input_file = strdup(text);
-        start_kernel(app);
+    if (strcmp(text, ctx->input_file)) {
+        free(ctx->input_file);
+        ctx->input_file = strdup(text);
+        start_kernel(ctx);
     }
 }
 
-void dt_changed(GtkSpinButton* self, struct App* app)
+void dt_changed(GtkSpinButton* self, struct context* ctx)
 {
     double value = gtk_spin_button_get_value(self);
-    if (value != app->dt) {
-        app->dt = value;
-        start_kernel(app);
+    if (value != ctx->dt) {
+        ctx->dt = value;
+        start_kernel(ctx);
     }
 }
 
 static void
 zoom_begin_cb (GtkGesture* gesture,
                GdkEventSequence* sequence,
-               struct App* app)
+               struct context* ctx)
 {
-    app->zoom_initial = app->zoom;
+    ctx->zoom_initial = ctx->zoom;
 }
 
 static void
 zoom_scale_changed_cb (GtkGestureZoom* z,
                        gdouble scale,
-                       struct App* app)
+                       struct context* ctx)
 {
-    app->zoom = app->zoom_initial * scale;
-    gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
+    ctx->zoom = ctx->zoom_initial * scale;
+    gtk_widget_queue_draw (GTK_WIDGET (ctx->drawing_area));
 }
 
 static void mouse_scroll(
     GtkEventControllerScroll* self,
     double dx, double dy,
-    struct App* app)
+    struct context* ctx)
 {
     if (dy > 0) {
-        app->zoom /= 1.1;
+        ctx->zoom /= 1.1;
     } else if (dy < 0) {
-        app->zoom *= 1.1;
+        ctx->zoom *= 1.1;
     }
-    gtk_widget_queue_draw (GTK_WIDGET (app->drawing_area));
+    gtk_widget_queue_draw (GTK_WIDGET (ctx->drawing_area));
 }
 
-GtkWidget* control_widget(struct App* app) {
+GtkWidget* control_widget(struct context* ctx) {
     GtkWidget* frame = gtk_frame_new("Controls");
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 
@@ -290,67 +290,67 @@ GtkWidget* control_widget(struct App* app) {
     gtk_box_append(GTK_BOX(box), gtk_label_new("Preset:"));
     const char* presets[] = {"2 Bodies", "Solar", "Saturn", NULL};
     GtkWidget* preset_selector = gtk_drop_down_new_from_strings(presets);
-    g_signal_connect(preset_selector, "state-flags-changed", G_CALLBACK(preset_changed), app);
+    g_signal_connect(preset_selector, "state-flags-changed", G_CALLBACK(preset_changed), ctx);
     gtk_box_append(GTK_BOX(box), preset_selector);
 
     const char* methods[] = {"Euler", "Verlet", NULL};
     gtk_box_append(GTK_BOX(box), gtk_label_new("Method:"));
-    GtkWidget* method_selector = app->method_selector = gtk_drop_down_new_from_strings(methods);
-    g_signal_connect(method_selector, "state-flags-changed", G_CALLBACK(method_changed), app);
+    GtkWidget* method_selector = ctx->method_selector = gtk_drop_down_new_from_strings(methods);
+    g_signal_connect(method_selector, "state-flags-changed", G_CALLBACK(method_changed), ctx);
     gtk_box_append(GTK_BOX(box), method_selector);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("Input:"));
     GtkWidget* entry = gtk_entry_new();
-    g_signal_connect(entry, "activate", G_CALLBACK(input_file_changed), app);
-    GtkEntryBuffer* buffer = app->input_file_entry = gtk_entry_get_buffer(GTK_ENTRY(entry));
-    gtk_entry_buffer_set_text(buffer, app->input_file, strlen(app->input_file));
+    g_signal_connect(entry, "activate", G_CALLBACK(input_file_changed), ctx);
+    GtkEntryBuffer* buffer = ctx->input_file_entry = gtk_entry_get_buffer(GTK_ENTRY(entry));
+    gtk_entry_buffer_set_text(buffer, ctx->input_file, strlen(ctx->input_file));
     gtk_box_append(GTK_BOX(box), entry);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("dt:"));
-    GtkWidget* dt = app->dt_selector = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
+    GtkWidget* dt = ctx->dt_selector = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
     gtk_spin_button_set_digits(GTK_SPIN_BUTTON(dt), 8);
-    gtk_spin_button_set_value(GTK_SPIN_BUTTON(dt), app->dt);
-    g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), app);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(dt), ctx->dt);
+    g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), ctx);
     gtk_box_append(GTK_BOX(box), dt);
 
     return frame;
 }
 
-GtkWidget* info_widget(struct App* app) {
+GtkWidget* info_widget(struct context* ctx) {
     GtkWidget* frame = gtk_frame_new("Info");
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_frame_set_child(GTK_FRAME(frame), box);
 
     const char* strings[] = { NULL };
-    GtkWidget* body_selector = app->body_selector = gtk_drop_down_new_from_strings(strings);
+    GtkWidget* body_selector = ctx->body_selector = gtk_drop_down_new_from_strings(strings);
 
     gtk_drop_down_set_selected(GTK_DROP_DOWN(body_selector), 0);
-    g_signal_connect(body_selector, "state-flags-changed", G_CALLBACK(active_changed), app);
+    g_signal_connect(body_selector, "state-flags-changed", G_CALLBACK(active_changed), ctx);
     gtk_box_append(GTK_BOX(box), body_selector);
 
     for (int i = 0; i < 3; i++) {
         GtkWidget* x = gtk_label_new("-");
         gtk_box_append(GTK_BOX(box), x);
-        app->r[i] = GTK_LABEL(x);
-        gtk_label_set_width_chars(app->r[i], 30);
-        gtk_label_set_use_markup(app->r[i], TRUE);
+        ctx->r[i] = GTK_LABEL(x);
+        gtk_label_set_width_chars(ctx->r[i], 30);
+        gtk_label_set_use_markup(ctx->r[i], TRUE);
     }
     for (int i = 0; i < 3; i++) {
         GtkWidget* vx = gtk_label_new("-");
         gtk_box_append(GTK_BOX(box), vx);
-        app->v[i] = GTK_LABEL(vx);
-        gtk_label_set_width_chars(app->v[i], 30);
-        gtk_label_set_use_markup(app->v[i], TRUE);
+        ctx->v[i] = GTK_LABEL(vx);
+        gtk_label_set_width_chars(ctx->v[i], 30);
+        gtk_label_set_use_markup(ctx->v[i], TRUE);
     }
 
     return frame;
 }
 
-GtkWidget* right_pane(struct App* app) {
+GtkWidget* right_pane(struct context* ctx) {
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 
-    gtk_box_append(GTK_BOX(box), control_widget(app));
-    gtk_box_append(GTK_BOX(box), info_widget(app));
+    gtk_box_append(GTK_BOX(box), control_widget(ctx));
+    gtk_box_append(GTK_BOX(box), info_widget(ctx));
 
     gtk_widget_set_halign(box, GTK_ALIGN_END);
     gtk_widget_set_valign(box, GTK_ALIGN_START);
@@ -358,16 +358,16 @@ GtkWidget* right_pane(struct App* app) {
     return box;
 }
 
-static void activate(GtkApplication *gapp, gpointer user_data)
+static void activate(GtkApplication* app, gpointer user_data)
 {
-    struct App* app = user_data;
+    struct context* ctx = user_data;
 
     GtkCssProvider *css_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(css_provider, "style.css");
 
     gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(css_provider), 0);
 
-    GtkWidget* window = gtk_application_window_new(gapp);
+    GtkWidget* window = gtk_application_window_new(app);
     gtk_window_set_title (GTK_WINDOW (window), "N-Body");
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
 
@@ -380,24 +380,24 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_window_set_child(GTK_WINDOW(window), overlay);
 
     gtk_overlay_set_child(GTK_OVERLAY(overlay), drawing_area);
-    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), right_pane(app));
+    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), right_pane(ctx));
 
-    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw_cb, app, NULL);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(drawing_area), draw, ctx, NULL);
 
     GtkEventController* motion = gtk_event_controller_motion_new();
-    g_signal_connect(motion, "motion", G_CALLBACK(motion_notify_event_cb), app);
+    g_signal_connect(motion, "motion", G_CALLBACK(motion_notify), ctx);
     gtk_event_controller_set_propagation_phase(motion, GTK_PHASE_CAPTURE);
     gtk_widget_add_controller(drawing_area, motion);
 
     GtkGesture* gclick = gtk_gesture_click_new();
-    g_signal_connect(gclick, "pressed", G_CALLBACK(button_press_event_cb), app);
+    g_signal_connect(gclick, "pressed", G_CALLBACK(button_press), ctx);
     gtk_event_controller_set_propagation_phase(
         GTK_EVENT_CONTROLLER(gclick), GTK_PHASE_CAPTURE);
     gtk_widget_add_controller(drawing_area, GTK_EVENT_CONTROLLER(gclick));
 
     GtkEventController* scroll = gtk_event_controller_scroll_new(
         GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
-    g_signal_connect(scroll, "scroll", G_CALLBACK(mouse_scroll), app);
+    g_signal_connect(scroll, "scroll", G_CALLBACK(mouse_scroll), ctx);
     gtk_event_controller_set_propagation_phase(scroll, GTK_PHASE_CAPTURE);
     gtk_widget_add_controller(drawing_area, scroll);
 
@@ -406,48 +406,39 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         GTK_EVENT_CONTROLLER(zoom), GTK_PHASE_CAPTURE);
     gtk_widget_add_controller(drawing_area, GTK_EVENT_CONTROLLER(zoom));
 
-    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), app);
-    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), app);
+    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), ctx);
+    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), ctx);
 
-    g_signal_connect(window, "destroy", G_CALLBACK(close_window), app);
+    g_signal_connect(window, "destroy", G_CALLBACK(close_window), ctx);
 
-    app->drawing_area = drawing_area;
-    app->timer_id = g_timeout_add(16, (GSourceFunc)redraw_timeout, app);
+    ctx->drawing_area = drawing_area;
+    ctx->timer_id = g_timeout_add(16, (GSourceFunc)redraw_timeout, ctx);
 
     gtk_window_present(GTK_WINDOW(window));
 }
 
-void spawn(struct App* app) {
-    //gchar** argv = g_strsplit(
-    //    gtk_string_list_get_string(app->kernels, app->active_kernel), " ", -1);
-
-    const gchar* exe = app->method == 0
+void spawn(struct context* ctx) {
+    const gchar* exe = ctx->method == 0
         ? "./euler.exe"
         : "./verlet.exe";
     gchar dt[40];
-    snprintf(dt, sizeof(dt) - 1, "%.16e", app->dt);
+    snprintf(dt, sizeof(dt) - 1, "%.16e", ctx->dt);
     const gchar* argv[] = {
         exe,
-        "--input", app->input_file,
+        "--input", ctx->input_file,
         "--dt", dt,
         "--T", "1e20",
         NULL};
-    printf("run\n");
-    int i = 0;
-    while (argv[i] != 0) {
-        printf("%s\n", argv[i++]);
-    }
-    app->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
-    //g_free(argv);
-    app->input = g_subprocess_get_stdout_pipe(app->subprocess);
-    app->line_input = g_data_input_stream_new(app->input);
-    app->cancel_read = g_cancellable_new();
+    ctx->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    ctx->input = g_subprocess_get_stdout_pipe(ctx->subprocess);
+    ctx->line_input = g_data_input_stream_new(ctx->input);
+    ctx->cancel_read = g_cancellable_new();
 }
 
-void read_child(struct App* app);
+void read_child(struct context* ctx);
 
 static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
-    struct App* app = user_data;
+    struct context* ctx = user_data;
 
     gsize size;
     char* line = g_data_input_stream_read_line_finish(G_DATA_INPUT_STREAM(input), res, &size, NULL);
@@ -455,65 +446,65 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
     if (line) {
         if (*line == 't') {
             // skip column names
-        } else if (*line == '#' && app->nbodies < sizeof(app->bodies)/sizeof(struct body)) {
+        } else if (*line == '#' && ctx->nbodies < sizeof(ctx->bodies)/sizeof(struct body)) {
             // header
-            struct body* body = &app->bodies[app->nbodies++];
+            struct body* body = &ctx->bodies[ctx->nbodies++];
             sscanf(line, "# %15s %lf", body->name, &body->m);
-        } else if (!app->header_processed) {
-            app->header_processed = 1;
+        } else if (!ctx->header_processed) {
+            ctx->header_processed = 1;
 
-            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->body_selector)));
-            for (int i = 0; i < app->nbodies; i++) {
-                gtk_string_list_append(strings, app->bodies[i].name);
+            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
+            for (int i = 0; i < ctx->nbodies; i++) {
+                gtk_string_list_append(strings, ctx->bodies[i].name);
             }
-            app->active_body = 0;
+            ctx->active_body = 0;
         }
 
-        if (app->header_processed) {
+        if (ctx->header_processed) {
             // parse line
             const char* sep = " ";
             char* p = line;
             p = strtok(p, sep); // skip time
-            for (int i = 0; p && i < app->nbodies; i++) {
-                if ((p = strtok(NULL, sep))) app->bodies[i].r[0] = atof(p);
-                if ((p = strtok(NULL, sep))) app->bodies[i].r[1] = atof(p);
-                if ((p = strtok(NULL, sep))) app->bodies[i].r[2] = atof(p);
+            for (int i = 0; p && i < ctx->nbodies; i++) {
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[0] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[1] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[2] = atof(p);
 
-                if ((p = strtok(NULL, sep))) app->bodies[i].v[0] = atof(p);
-                if ((p = strtok(NULL, sep))) app->bodies[i].v[1] = atof(p);
-                if ((p = strtok(NULL, sep))) app->bodies[i].v[2] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[0] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[1] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[2] = atof(p);
             }
 
-            update_all(app);
-            app->suspend = 1;
+            update_all(ctx);
+            ctx->suspend = 1;
         }
         free(line); // performance issue
 
-        if (!app->suspend) {
-            read_child(app);
+        if (!ctx->suspend) {
+            read_child(ctx);
         }
     }
 }
 
-void read_child(struct App* app) {
+void read_child(struct context* ctx) {
     g_data_input_stream_read_line_async(
-        app->line_input,
-        /*priority*/ 0, app->cancel_read,
-        on_new_data, app);
+        ctx->line_input,
+        /*priority*/ 0, ctx->cancel_read,
+        on_new_data, ctx);
 }
 
-void start_kernel(struct App* app) {
-    stop_kernel(app);
+void start_kernel(struct context* ctx) {
+    stop_kernel(ctx);
 
-    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->body_selector)));
-    gtk_string_list_splice(strings, 0, app->nbodies, NULL);
-    app->nbodies = 0;
-    app->active_body = -1;
-    app->header_processed = 0;
-    app->suspend = 0;
+    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
+    gtk_string_list_splice(strings, 0, ctx->nbodies, NULL);
+    ctx->nbodies = 0;
+    ctx->active_body = -1;
+    ctx->header_processed = 0;
+    ctx->suspend = 0;
 
-    spawn(app);
-    read_child(app);
+    spawn(ctx);
+    read_child(ctx);
 }
 
 int main(int argc, char **argv)
@@ -524,26 +515,26 @@ int main(int argc, char **argv)
         {"Saturn", "saturn.txt", 1, 0.00001}
     };
 
-    struct App app;
-    GtkApplication* gapp;
+    struct context ctx;
+    GtkApplication* app;
     int status;
 
-    memset(&app, 0, sizeof(app));
-    app.zoom = app.zoom_initial = 0.1;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.zoom = ctx.zoom_initial = 0.1;
 
-    app.active_preset = -1;
-    app.method = -1;
-    app.input_file = strdup("2bodies.txt");
-    app.dt = 1e-5;
-    app.presets = presets;
+    ctx.active_preset = -1;
+    ctx.method = -1;
+    ctx.input_file = strdup("2bodies.txt");
+    ctx.dt = 1e-5;
+    ctx.presets = presets;
 
     gtk_disable_setlocale();
 
-    gapp = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
-    g_signal_connect (gapp, "activate", G_CALLBACK (activate), &app);
+    app = gtk_application_new("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
+    g_signal_connect(app, "activate", G_CALLBACK(activate), &ctx);
 
-    status = g_application_run (G_APPLICATION (gapp), argc, argv);
-    g_object_unref (gapp);
+    status = g_application_run(G_APPLICATION(app), argc, argv);
+    g_object_unref (app);
 
     return status;
 }
