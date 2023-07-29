@@ -318,7 +318,7 @@ GtkWidget* control_widget(struct App* app) {
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("dt:"));
     GtkWidget* dt = app->dt_selector = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
-    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(dt), 16);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(dt), 8);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(dt), app->dt);
     g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), app);
     gtk_box_append(GTK_BOX(box), dt);
@@ -342,7 +342,6 @@ GtkWidget* info_widget(struct App* app) {
         GtkWidget* x = gtk_label_new("-");
         gtk_box_append(GTK_BOX(box), x);
         app->r[i] = GTK_LABEL(x);
-        gtk_label_set_justify(app->r[i], GTK_JUSTIFY_LEFT);
         gtk_label_set_width_chars(app->r[i], 30);
         gtk_label_set_use_markup(app->r[i], TRUE);
     }
@@ -350,7 +349,6 @@ GtkWidget* info_widget(struct App* app) {
         GtkWidget* vx = gtk_label_new("-");
         gtk_box_append(GTK_BOX(box), vx);
         app->v[i] = GTK_LABEL(vx);
-        gtk_label_set_justify(app->v[i], GTK_JUSTIFY_LEFT);
         gtk_label_set_width_chars(app->v[i], 30);
         gtk_label_set_use_markup(app->v[i], TRUE);
     }
@@ -374,6 +372,11 @@ GtkWidget* right_pane(struct App* app) {
 static void activate(GtkApplication *gapp, gpointer user_data)
 {
     struct App* app = user_data;
+
+    GtkCssProvider *css_provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_path(css_provider, "style.css");
+
+    gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(css_provider), 0);
 
     GtkWidget* window = gtk_application_window_new(gapp);
     gtk_window_set_title (GTK_WINDOW (window), "Window");
