@@ -336,27 +336,18 @@ void dt_changed(GtkSpinButton* self, struct context* ctx)
     }
 }
 
-static void
-zoom_begin_cb (GtkGesture* gesture,
-               GdkEventSequence* sequence,
-               struct context* ctx)
+void zoom_begin(GtkGesture* gesture, GdkEventSequence* sequence, struct context* ctx)
 {
     ctx->zoom_initial = ctx->zoom;
 }
 
-static void
-zoom_scale_changed_cb (GtkGestureZoom* z,
-                       gdouble scale,
-                       struct context* ctx)
+void zoom_scale_changed(GtkGestureZoom* z, gdouble scale, struct context* ctx)
 {
     ctx->zoom = ctx->zoom_initial * scale;
     gtk_widget_queue_draw (GTK_WIDGET (ctx->drawing_area));
 }
 
-static void mouse_scroll(
-    GtkEventControllerScroll* self,
-    double dx, double dy,
-    struct context* ctx)
+void mouse_scroll(GtkEventControllerScroll* self, double dx, double dy, struct context* ctx)
 {
     if (dy > 0) {
         ctx->zoom /= 1.1;
@@ -442,7 +433,7 @@ GtkWidget* right_pane(struct context* ctx) {
     return box;
 }
 
-static void activate(GtkApplication* app, gpointer user_data)
+void activate(GtkApplication* app, gpointer user_data)
 {
     struct context* ctx = user_data;
 
@@ -490,8 +481,8 @@ static void activate(GtkApplication* app, gpointer user_data)
         GTK_EVENT_CONTROLLER(zoom), GTK_PHASE_CAPTURE);
     gtk_widget_add_controller(drawing_area, GTK_EVENT_CONTROLLER(zoom));
 
-    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin_cb), ctx);
-    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed_cb), ctx);
+    g_signal_connect(zoom, "begin", G_CALLBACK(zoom_begin), ctx);
+    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_scale_changed), ctx);
 
     g_signal_connect(window, "destroy", G_CALLBACK(close_window), ctx);
 
