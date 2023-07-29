@@ -169,7 +169,6 @@ void close_window(GtkWidget* widget, struct context* ctx)
     stop_kernel(ctx);
 }
 
-
 void read_child(struct context* ctx);
 
 void update_all(struct context* ctx) {
@@ -188,7 +187,63 @@ void update_all(struct context* ctx) {
     gtk_widget_queue_draw(ctx->drawing_area);
 }
 
-gboolean redraw_timeout(struct context* ctx)
+void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
+    struct context* ctx = user_data;
+
+    gsize size;
+    char* line = g_data_input_stream_read_line_finish(G_DATA_INPUT_STREAM(input), res, &size, NULL);
+
+    if (line) {
+        if (*line == 't') {
+            // skip column names
+        } else if (*line == '#' && ctx->nbodies < sizeof(ctx->bodies)/sizeof(struct body)) {
+            // header
+            struct body* body = &ctx->bodies[ctx->nbodies++];
+            sscanf(line, "# %15s %lf", body->name, &body->m);
+        } else if (!ctx->header_processed) {
+            ctx->header_processed = 1;
+
+            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
+            for (int i = 0; i < ctx->nbodies; i++) {
+                gtk_string_list_append(strings, ctx->bodies[i].name);
+            }
+            ctx->active_body = 0;
+        }
+
+        if (ctx->header_processed) {
+            // parse line
+            const char* sep = " ";
+            char* p = line;
+            p = strtok(p, sep); // skip time
+            for (int i = 0; p && i < ctx->nbodies; i++) {
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[0] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[1] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[2] = atof(p);
+
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[0] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[1] = atof(p);
+                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[2] = atof(p);
+            }
+
+            update_all(ctx);
+            ctx->suspend = 1;
+        }
+        free(line); // performance issue
+
+        if (!ctx->suspend) {
+            read_child(ctx);
+        }
+    }
+}
+
+void read_child(struct context* ctx) {
+    g_data_input_stream_read_line_async(
+        ctx->line_input,
+        /*priority*/ 0, ctx->cancel_read,
+        on_new_data, ctx);
+}
+
+gboolean timeout(struct context* ctx)
 {
     if (ctx->header_processed && ctx->suspend) {
         ctx->suspend = 0;
@@ -198,14 +253,43 @@ gboolean redraw_timeout(struct context* ctx)
     return ctx->timer_id > 0;
 }
 
-static void
-active_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
+void active_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
 {
     int active = gtk_drop_down_get_selected(self);
     ctx->active_body = active;
 }
 
-void start_kernel(struct context* ctx);
+void spawn(struct context* ctx) {
+    const gchar* exe = ctx->method == 0
+        ? "./euler.exe"
+        : "./verlet.exe";
+    gchar dt[40];
+    snprintf(dt, sizeof(dt) - 1, "%.16e", ctx->dt);
+    const gchar* argv[] = {
+        exe,
+        "--input", ctx->input_file,
+        "--dt", dt,
+        "--T", "1e20",
+        NULL};
+    ctx->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    ctx->input = g_subprocess_get_stdout_pipe(ctx->subprocess);
+    ctx->line_input = g_data_input_stream_new(ctx->input);
+    ctx->cancel_read = g_cancellable_new();
+}
+
+void start_kernel(struct context* ctx) {
+    stop_kernel(ctx);
+
+    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
+    gtk_string_list_splice(strings, 0, ctx->nbodies, NULL);
+    ctx->nbodies = 0;
+    ctx->active_body = -1;
+    ctx->header_processed = 0;
+    ctx->suspend = 0;
+
+    spawn(ctx);
+    read_child(ctx);
+}
 
 void method_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
 {
@@ -412,99 +496,9 @@ static void activate(GtkApplication* app, gpointer user_data)
     g_signal_connect(window, "destroy", G_CALLBACK(close_window), ctx);
 
     ctx->drawing_area = drawing_area;
-    ctx->timer_id = g_timeout_add(16, (GSourceFunc)redraw_timeout, ctx);
+    ctx->timer_id = g_timeout_add(16, (GSourceFunc)timeout, ctx);
 
     gtk_window_present(GTK_WINDOW(window));
-}
-
-void spawn(struct context* ctx) {
-    const gchar* exe = ctx->method == 0
-        ? "./euler.exe"
-        : "./verlet.exe";
-    gchar dt[40];
-    snprintf(dt, sizeof(dt) - 1, "%.16e", ctx->dt);
-    const gchar* argv[] = {
-        exe,
-        "--input", ctx->input_file,
-        "--dt", dt,
-        "--T", "1e20",
-        NULL};
-    ctx->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
-    ctx->input = g_subprocess_get_stdout_pipe(ctx->subprocess);
-    ctx->line_input = g_data_input_stream_new(ctx->input);
-    ctx->cancel_read = g_cancellable_new();
-}
-
-void read_child(struct context* ctx);
-
-static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
-    struct context* ctx = user_data;
-
-    gsize size;
-    char* line = g_data_input_stream_read_line_finish(G_DATA_INPUT_STREAM(input), res, &size, NULL);
-
-    if (line) {
-        if (*line == 't') {
-            // skip column names
-        } else if (*line == '#' && ctx->nbodies < sizeof(ctx->bodies)/sizeof(struct body)) {
-            // header
-            struct body* body = &ctx->bodies[ctx->nbodies++];
-            sscanf(line, "# %15s %lf", body->name, &body->m);
-        } else if (!ctx->header_processed) {
-            ctx->header_processed = 1;
-
-            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
-            for (int i = 0; i < ctx->nbodies; i++) {
-                gtk_string_list_append(strings, ctx->bodies[i].name);
-            }
-            ctx->active_body = 0;
-        }
-
-        if (ctx->header_processed) {
-            // parse line
-            const char* sep = " ";
-            char* p = line;
-            p = strtok(p, sep); // skip time
-            for (int i = 0; p && i < ctx->nbodies; i++) {
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[0] = atof(p);
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[1] = atof(p);
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].r[2] = atof(p);
-
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[0] = atof(p);
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[1] = atof(p);
-                if ((p = strtok(NULL, sep))) ctx->bodies[i].v[2] = atof(p);
-            }
-
-            update_all(ctx);
-            ctx->suspend = 1;
-        }
-        free(line); // performance issue
-
-        if (!ctx->suspend) {
-            read_child(ctx);
-        }
-    }
-}
-
-void read_child(struct context* ctx) {
-    g_data_input_stream_read_line_async(
-        ctx->line_input,
-        /*priority*/ 0, ctx->cancel_read,
-        on_new_data, ctx);
-}
-
-void start_kernel(struct context* ctx) {
-    stop_kernel(ctx);
-
-    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ctx->body_selector)));
-    gtk_string_list_splice(strings, 0, ctx->nbodies, NULL);
-    ctx->nbodies = 0;
-    ctx->active_body = -1;
-    ctx->header_processed = 0;
-    ctx->suspend = 0;
-
-    spawn(ctx);
-    read_child(ctx);
 }
 
 int main(int argc, char **argv)
