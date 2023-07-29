@@ -55,6 +55,11 @@ struct App {
     char* input_file;
     double dt;
 
+    // controls
+    GtkWidget* method_selector;
+    GtkEntryBuffer* input_file_entry;
+    GtkWidget* dt_selector;
+
     // child
     GSubprocess* subprocess;
 
@@ -226,6 +231,15 @@ void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
     int active = gtk_drop_down_get_selected(self);
     if (active != app->active_preset) {
         app->active_preset = active;
+        struct Preset* preset = &app->presets[active];
+        app->method = preset->method;
+        app->dt = preset->dt;
+        free(app->input_file);
+        app->input_file = strdup(preset->input_file);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->method_selector), preset->method);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(app->dt_selector), preset->dt);
+        gtk_entry_buffer_set_text(app->input_file_entry, preset->input_file, strlen(preset->input_file));
+        start_kernel(app);
     }
 }
 
@@ -289,19 +303,19 @@ GtkWidget* info_widget(struct App* app) {
 
     const char* methods[] = {"Euler", "Verlet", NULL};
     gtk_box_append(GTK_BOX(box), gtk_label_new("Method:"));
-    GtkWidget* method_selector = gtk_drop_down_new_from_strings(methods);
+    GtkWidget* method_selector = app->method_selector = gtk_drop_down_new_from_strings(methods);
     g_signal_connect(method_selector, "state-flags-changed", G_CALLBACK(method_changed), app);
     gtk_box_append(GTK_BOX(box), method_selector);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("Input:"));
     GtkWidget* entry = gtk_entry_new();
     g_signal_connect(entry, "activate", G_CALLBACK(input_file_changed), app);
-    GtkEntryBuffer* buffer = gtk_entry_get_buffer(GTK_ENTRY(entry));
+    GtkEntryBuffer* buffer = app->input_file_entry = gtk_entry_get_buffer(GTK_ENTRY(entry));
     gtk_entry_buffer_set_text(buffer, app->input_file, strlen(app->input_file));
     gtk_box_append(GTK_BOX(box), entry);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("dt:"));
-    GtkWidget* dt = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
+    GtkWidget* dt = app->dt_selector = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
     gtk_spin_button_set_digits(GTK_SPIN_BUTTON(dt), 16);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(dt), app->dt);
     g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), app);
@@ -514,6 +528,7 @@ int main(int argc, char **argv)
     app.method = -1;
     app.input_file = strdup("2bodies.txt");
     app.dt = 1e-5;
+    app.presets = presets;
 
     gtk_disable_setlocale();
 
