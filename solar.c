@@ -15,6 +15,19 @@ struct body
     double m;
 };
 
+struct Preset {
+    const char* name;
+    const char* input_file;
+    int method;
+    double dt;
+};
+
+struct Preset presets[] = {
+    {"2 Bodies", "2bodies.txt", 1, 0.00005},
+    {"Solar", "solar.txt", 1, 0.005},
+    {"Saturn", "saturn.txt", 1, 0.00001}
+};
+
 struct App {
     int nbodies;
     struct body bodies[1000];
@@ -22,7 +35,6 @@ struct App {
     GtkLabel* r[3];
     GtkLabel* v[3];
     int active_body;
-    int active_kernel;
 
     GtkWidget* drop_down;
 
@@ -36,6 +48,9 @@ struct App {
     GtkStringList* kernels;
 
     // kernel settings
+    struct Preset* presets;
+    int active_preset;
+
     int method;
     char* input_file;
     double dt;
@@ -197,21 +212,38 @@ active_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 
 void start_kernel(struct App* app);
 
-static void
-ker_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
-{
-    int active = gtk_drop_down_get_selected(self);
-    if (active != app->active_kernel) {
-        app->active_kernel = active;
-        start_kernel(app);
-    }
-}
-
 void method_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
 {
     int active = gtk_drop_down_get_selected(self);
     if (active != app->method) {
         app->method = active;
+        start_kernel(app);
+    }
+}
+
+void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
+{
+    int active = gtk_drop_down_get_selected(self);
+    if (active != app->active_preset) {
+        app->active_preset = active;
+    }
+}
+
+void input_file_changed(GtkEntry* self, struct App* app) {
+    GtkEntryBuffer* buffer = gtk_entry_get_buffer(self);
+    const char* text = gtk_entry_buffer_get_text(buffer);
+    if (strcmp(text, app->input_file)) {
+        free(app->input_file);
+        app->input_file = strdup(text);
+        start_kernel(app);
+    }
+}
+
+void dt_changed(GtkSpinButton* self, struct App* app)
+{
+    double value = gtk_spin_button_get_value(self);
+    if (value != app->dt) {
+        app->dt = value;
         start_kernel(app);
     }
 }
@@ -248,6 +280,13 @@ static void mouse_scroll(
 
 GtkWidget* info_widget(struct App* app) {
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+    gtk_box_append(GTK_BOX(box), gtk_label_new("Presets:"));
+    const char* presets[] = {"2 Bodies", "Solar", "Saturn", NULL};
+    GtkWidget* preset_selector = gtk_drop_down_new_from_strings(presets);
+    g_signal_connect(preset_selector, "state-flags-changed", G_CALLBACK(preset_changed), app);
+    gtk_box_append(GTK_BOX(box), preset_selector);
+
     const char* methods[] = {"Euler", "Verlet", NULL};
     gtk_box_append(GTK_BOX(box), gtk_label_new("Method:"));
     GtkWidget* method_selector = gtk_drop_down_new_from_strings(methods);
@@ -255,13 +294,18 @@ GtkWidget* info_widget(struct App* app) {
     gtk_box_append(GTK_BOX(box), method_selector);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("Input:"));
-    gtk_box_append(GTK_BOX(box), gtk_entry_new());
+    GtkWidget* entry = gtk_entry_new();
+    g_signal_connect(entry, "activate", G_CALLBACK(input_file_changed), app);
+    GtkEntryBuffer* buffer = gtk_entry_get_buffer(GTK_ENTRY(entry));
+    gtk_entry_buffer_set_text(buffer, app->input_file, strlen(app->input_file));
+    gtk_box_append(GTK_BOX(box), entry);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("dt:"));
-    gtk_box_append(GTK_BOX(box), gtk_spin_button_new_with_range(0.0000001, 0.1, 0.00001));
-
-    gtk_box_append(GTK_BOX(box), gtk_label_new("T:"));
-    gtk_box_append(GTK_BOX(box), gtk_spin_button_new_with_range(0.1, 1e10, 1));
+    GtkWidget* dt = gtk_spin_button_new_with_range(1e-14, 0.1, 0.00001);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(dt), 16);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(dt), app->dt);
+    g_signal_connect(dt, "value_changed", G_CALLBACK(dt_changed), app);
+    gtk_box_append(GTK_BOX(box), dt);
 
     gtk_box_append(GTK_BOX(box), gtk_label_new("Info:"));
 
@@ -308,8 +352,6 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_widget_set_vexpand(drawing_area, TRUE);
     gtk_widget_set_hexpand(drawing_area, TRUE);
 
-    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_window_set_child(GTK_WINDOW(window), box);
     const char* kernels[] = {
         "./euler.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
         "./verlet.exe --input 2bodies.txt --dt 0.00005 --T 0.1",
@@ -318,14 +360,10 @@ static void activate(GtkApplication *gapp, gpointer user_data)
         "./verlet.exe --input saturn.txt --dt 0.00001 --T 1e10",
         NULL
     };
-    GtkWidget* ker_selector = gtk_drop_down_new_from_strings(kernels);
-    g_signal_connect(ker_selector, "state-flags-changed", G_CALLBACK(ker_changed), app);
-    app->kernels = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(ker_selector)));
-
-    gtk_box_append(GTK_BOX(box), ker_selector);
 
     GtkWidget* overlay = gtk_overlay_new();
-    gtk_box_append(GTK_BOX(box), overlay);
+
+    gtk_window_set_child(GTK_WINDOW(window), overlay);
 
     gtk_overlay_set_child(GTK_OVERLAY(overlay), drawing_area);
     gtk_overlay_add_overlay(GTK_OVERLAY(overlay), info_widget(app));
@@ -472,9 +510,8 @@ int main(int argc, char **argv)
 
     memset(&app, 0, sizeof(app));
     app.zoom = app.zoom_initial = 0.1;
-    app.active_kernel = -1;
 
-    app.method = 0;
+    app.method = -1;
     app.input_file = strdup("2bodies.txt");
     app.dt = 1e-5;
 
