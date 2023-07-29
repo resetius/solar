@@ -6,7 +6,8 @@
 
 struct body
 {
-    double x0, y0; // surface coord
+    double x0;
+    double y0;
     int show_tip;
 
     char name[16];
@@ -15,17 +16,11 @@ struct body
     double m;
 };
 
-struct Preset {
+struct preset {
     const char* name;
     const char* input_file;
     int method;
     double dt;
-};
-
-struct Preset presets[] = {
-    {"2 Bodies", "2bodies.txt", 1, 0.00005},
-    {"Solar", "solar.txt", 1, 0.005},
-    {"Saturn", "saturn.txt", 1, 0.00001}
 };
 
 struct App {
@@ -36,8 +31,7 @@ struct App {
     GtkLabel* v[3];
     int active_body;
 
-    GtkWidget* drop_down;
-
+    GtkWidget* body_selector;
     GtkWidget* drawing_area;
 
     guint timer_id;
@@ -48,7 +42,7 @@ struct App {
     GtkStringList* kernels;
 
     // kernel settings
-    struct Preset* presets;
+    struct preset* presets;
     int active_preset;
 
     int method;
@@ -70,11 +64,7 @@ struct App {
     int suspend;
 };
 
-/* Redraw the screen from the surface. Note that the ::draw
- * signal receives a ready-to-be-used cairo_t that is already
- * clipped to only draw the exposed areas of the widget
- */
-static void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
+void draw_cb(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
 {
     struct App* app = user_data;
     for (int i = 0; i < app->nbodies; ++i)
@@ -131,7 +121,7 @@ static void button_press_event_cb(GtkGestureClick* self, int npress, double x, d
     int argmin = get_body(x, y, app);
     if (argmin >= 0)
     {
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->drop_down), argmin);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(app->body_selector), argmin);
         app->active_body = argmin;
     }
 }
@@ -231,7 +221,7 @@ void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct App* app)
     int active = gtk_drop_down_get_selected(self);
     if (active != app->active_preset) {
         app->active_preset = active;
-        struct Preset* preset = &app->presets[active];
+        struct preset* preset = &app->presets[active];
         app->method = preset->method;
         app->dt = preset->dt;
         free(app->input_file);
@@ -332,11 +322,11 @@ GtkWidget* info_widget(struct App* app) {
     gtk_frame_set_child(GTK_FRAME(frame), box);
 
     const char* strings[] = { NULL };
-    GtkWidget* drop_down = gtk_drop_down_new_from_strings(strings);
+    GtkWidget* body_selector = app->body_selector = gtk_drop_down_new_from_strings(strings);
 
-    gtk_drop_down_set_selected(GTK_DROP_DOWN(drop_down), 0);
-    g_signal_connect(drop_down, "state-flags-changed", G_CALLBACK(active_changed), app);
-    gtk_box_append(GTK_BOX(box), drop_down);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(body_selector), 0);
+    g_signal_connect(body_selector, "state-flags-changed", G_CALLBACK(active_changed), app);
+    gtk_box_append(GTK_BOX(box), body_selector);
 
     for (int i = 0; i < 3; i++) {
         GtkWidget* x = gtk_label_new("-");
@@ -352,7 +342,6 @@ GtkWidget* info_widget(struct App* app) {
         gtk_label_set_width_chars(app->v[i], 30);
         gtk_label_set_use_markup(app->v[i], TRUE);
     }
-    app->drop_down = drop_down;
 
     return frame;
 }
@@ -379,7 +368,7 @@ static void activate(GtkApplication *gapp, gpointer user_data)
     gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(css_provider), 0);
 
     GtkWidget* window = gtk_application_window_new(gapp);
-    gtk_window_set_title (GTK_WINDOW (window), "Window");
+    gtk_window_set_title (GTK_WINDOW (window), "N-Body");
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
 
     GtkWidget* drawing_area = gtk_drawing_area_new();
@@ -465,15 +454,15 @@ static void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
 
     if (line) {
         if (*line == 't') {
-            // skip
-        } else if (*line == '#') {
+            // skip column names
+        } else if (*line == '#' && app->nbodies < sizeof(app->bodies)/sizeof(struct body)) {
             // header
             struct body* body = &app->bodies[app->nbodies++];
             sscanf(line, "# %15s %lf", body->name, &body->m);
         } else if (!app->header_processed) {
             app->header_processed = 1;
 
-            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->drop_down)));
+            GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->body_selector)));
             for (int i = 0; i < app->nbodies; i++) {
                 gtk_string_list_append(strings, app->bodies[i].name);
             }
@@ -516,7 +505,7 @@ void read_child(struct App* app) {
 void start_kernel(struct App* app) {
     stop_kernel(app);
 
-    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->drop_down)));
+    GtkStringList* strings = GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(app->body_selector)));
     gtk_string_list_splice(strings, 0, app->nbodies, NULL);
     app->nbodies = 0;
     app->active_body = -1;
@@ -529,6 +518,12 @@ void start_kernel(struct App* app) {
 
 int main(int argc, char **argv)
 {
+    struct preset presets[] = {
+        {"2 Bodies", "2bodies.txt", 1, 0.00005},
+        {"Solar", "solar.txt", 1, 0.005},
+        {"Saturn", "saturn.txt", 1, 0.00001}
+    };
+
     struct App app;
     GtkApplication* gapp;
     int status;
