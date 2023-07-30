@@ -46,7 +46,7 @@ struct context {
     int active_preset;
 
     int method;
-    char* input_file;
+    char input_file[100];
     double dt;
 
     // controls
@@ -228,7 +228,7 @@ void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
             update_all(ctx);
             ctx->suspend = 1;
         }
-        free(line); // performance issue
+        g_free(line); // performance issue
 
         if (!ctx->suspend) {
             read_child(ctx);
@@ -308,8 +308,7 @@ void preset_changed(GtkDropDown* self, GtkStateFlags flags, struct context* ctx)
         struct preset* preset = &ctx->presets[active];
         ctx->method = preset->method;
         ctx->dt = preset->dt;
-        free(ctx->input_file);
-        ctx->input_file = strdup(preset->input_file);
+        strncpy(ctx->input_file, preset->input_file, sizeof(ctx->input_file));
         gtk_drop_down_set_selected(GTK_DROP_DOWN(ctx->method_selector), preset->method);
         gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctx->dt_selector), preset->dt);
         gtk_entry_buffer_set_text(ctx->input_file_entry, preset->input_file, strlen(preset->input_file));
@@ -321,8 +320,7 @@ void input_file_changed(GtkEntry* self, struct context* ctx) {
     GtkEntryBuffer* buffer = gtk_entry_get_buffer(self);
     const char* text = gtk_entry_buffer_get_text(buffer);
     if (strcmp(text, ctx->input_file)) {
-        free(ctx->input_file);
-        ctx->input_file = strdup(text);
+        strncpy(ctx->input_file, text, sizeof(ctx->input_file));
         start_kernel(ctx);
     }
 }
@@ -509,7 +507,7 @@ int main(int argc, char **argv)
 
     ctx.active_preset = -1;
     ctx.method = -1;
-    ctx.input_file = strdup("2bodies.txt");
+    strncpy(ctx.input_file, "2bodies.txt", sizeof(ctx.input_file));
     ctx.dt = 1e-5;
     ctx.presets = presets;
 
