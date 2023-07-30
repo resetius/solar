@@ -1,8 +1,5 @@
 #include <gtk/gtk.h>
 #include <gio/gio.h>
-#include <math.h>
-#include <limits.h>
-#include <locale.h>
 
 struct body
 {
@@ -69,7 +66,6 @@ void draw(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
     struct context* ctx = user_data;
     for (int i = 0; i < ctx->nbodies; ++i)
     {
-        // assume w = h
         struct body* body = &ctx->bodies[i];
         double x = body->r[0] * w * ctx->zoom + w / 2.0;
         double y = body->r[1] * w * ctx->zoom + h / 2.0;
@@ -108,7 +104,7 @@ int get_body(double x, double y, struct context* ctx) {
             argmin = i;
         }
     }
-    if (sqrt(mindist) < 5)
+    if (argmin >= 0 && mindist * mindist < 100)
     {
         return argmin;
     } else {
@@ -177,9 +173,9 @@ void update_all(struct context* ctx) {
     if (i >= 0 && i < ctx->nbodies) {
         for (int j = 0; j < 3; j = j + 1)
         {
-            snprintf(buf, sizeof(buf) - 1, "<tt>r<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].r[j]);
+            snprintf(buf, sizeof(buf), "<tt>r<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].r[j]);
             gtk_label_set_label(ctx->r[j], buf);
-            snprintf(buf, sizeof(buf) - 1, "<tt>v<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].v[j]);
+            snprintf(buf, sizeof(buf), "<tt>v<sub>%c</sub> = % .8le</tt>", 'x'+j, ctx->bodies[i].v[j]);
             gtk_label_set_label(ctx->v[j], buf);
         }
     }
@@ -264,14 +260,14 @@ void spawn(struct context* ctx) {
         ? "./euler.exe"
         : "./verlet.exe";
     gchar dt[40];
-    snprintf(dt, sizeof(dt) - 1, "%.16e", ctx->dt);
+    snprintf(dt, sizeof(dt), "%.16e", ctx->dt);
     const gchar* argv[] = {
         exe,
         "--input", ctx->input_file,
         "--dt", dt,
         "--T", "1e20",
         NULL};
-    ctx->subprocess = g_subprocess_newv((const gchar**)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
+    ctx->subprocess = g_subprocess_newv(argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE, NULL);
     ctx->input = g_subprocess_get_stdout_pipe(ctx->subprocess);
     ctx->line_input = g_data_input_stream_new(ctx->input);
     ctx->cancel_read = g_cancellable_new();
@@ -342,7 +338,7 @@ void zoom_begin(GtkGesture* gesture, GdkEventSequence* sequence, struct context*
 void zoom_scale_changed(GtkGestureZoom* z, gdouble scale, struct context* ctx)
 {
     ctx->zoom = ctx->zoom_initial * scale;
-    gtk_widget_queue_draw (GTK_WIDGET (ctx->drawing_area));
+    gtk_widget_queue_draw(GTK_WIDGET(ctx->drawing_area));
 }
 
 void mouse_scroll(GtkEventControllerScroll* self, double dx, double dy, struct context* ctx)
@@ -352,7 +348,7 @@ void mouse_scroll(GtkEventControllerScroll* self, double dx, double dy, struct c
     } else if (dy < 0) {
         ctx->zoom *= 1.1;
     }
-    gtk_widget_queue_draw (GTK_WIDGET (ctx->drawing_area));
+    gtk_widget_queue_draw(GTK_WIDGET(ctx->drawing_area));
 }
 
 GtkWidget* control_widget(struct context* ctx) {
@@ -435,7 +431,7 @@ void activate(GtkApplication* app, gpointer user_data)
 {
     struct context* ctx = user_data;
 
-    GtkCssProvider *css_provider = gtk_css_provider_new();
+    GtkCssProvider* css_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(css_provider, "style.css");
 
     gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(css_provider), 0);
