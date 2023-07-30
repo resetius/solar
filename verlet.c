@@ -235,18 +235,19 @@ void print(struct data* data, double t) {
 }
 
 void solve(struct data* data, double T) {
+    double t = 0;
     print_header(data);
-    print(data, 0);
-    int N = T / data->dt;
+    print(data, t);
     verlet_init(data);
-    for (int i = 0; i < N; i++) {
+    while (t < T) {
         verlet_next(data);
-        print(data, (i + 1) * data->dt);
+        t += data->dt;
+        print(data, t);
     }
 }
 
 void usage(const char* name) {
-    printf("%s --input file.txt [--dt 0.001] [--T 10] [--test]\n", name);
+    fprintf(stderr, "%s --input file.txt [--dt 0.001] [--T 10] [--test]\n", name);
     exit(0);
 }
 
