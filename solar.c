@@ -22,7 +22,7 @@ struct preset {
 
 struct context {
     int nbodies;
-    struct body bodies[1000];
+    struct body bodies[10000];
 
     GtkLabel* r[3];
     GtkLabel* v[3];
@@ -74,7 +74,7 @@ void draw(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
         } else {
             cairo_set_source_rgb(cr, 0, 0, 0);
         }
-        cairo_arc(cr, x, y, 1, 0, 2 * M_PI);
+        cairo_arc(cr, x, y, 2, 0, 2 * M_PI);
         cairo_fill(cr);
 
         body->x0 = x;
@@ -357,7 +357,7 @@ GtkWidget* control_widget(struct context* ctx) {
 
     gtk_frame_set_child(GTK_FRAME(frame), box);
     gtk_box_append(GTK_BOX(box), gtk_label_new("Preset:"));
-    const char* presets[] = {"2 Bodies", "Solar", "Saturn", NULL};
+    const char* presets[] = {"2 Bodies", "3 Bodies", "Solar", "Saturn", NULL};
     GtkWidget* preset_selector = gtk_drop_down_new_from_strings(presets);
     g_signal_connect(preset_selector, "state-flags-changed", G_CALLBACK(preset_changed), ctx);
     gtk_box_append(GTK_BOX(box), preset_selector);
@@ -490,6 +490,7 @@ int main(int argc, char **argv)
 {
     struct preset presets[] = {
         {"2 Bodies", "2bodies.txt", 1, 0.00005},
+        {"3 Bodies", "3bodies.txt", 1, 0.00001},
         {"Solar", "solar.txt", 1, 0.005},
         {"Saturn", "saturn.txt", 1, 0.00001}
     };
