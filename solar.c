@@ -11,6 +11,13 @@ struct body
     double r[3];
     double v[3];
     double m;
+
+    // color
+    double cr;
+    double cg;
+    double cb;
+    // radius
+    double rad;
 };
 
 struct preset {
@@ -72,9 +79,9 @@ void draw(GtkDrawingArea* da, cairo_t *cr, int w, int h, void* user_data)
         if (ctx->active_body == i) {
             cairo_set_source_rgb(cr, 1, 0, 0);
         } else {
-            cairo_set_source_rgb(cr, 0, 0, 0);
+            cairo_set_source_rgb(cr, body->cr, body->cg, body->cb);
         }
-        cairo_arc(cr, x, y, 2, 0, 2 * M_PI);
+        cairo_arc(cr, x, y, 2*body->rad, 0, 2 * M_PI);
         cairo_fill(cr);
 
         body->x0 = x;
@@ -195,7 +202,26 @@ void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
         } else if (*line == '#' && ctx->nbodies < sizeof(ctx->bodies)/sizeof(struct body)) {
             // header
             struct body* body = &ctx->bodies[ctx->nbodies++];
-            sscanf(line, "# %15s %lf", body->name, &body->m);
+            body->cr = body->cg = body->cb = 0.0;
+            body->rad = 1.0;
+            char color[12];
+            double rad;
+            int a = sscanf(line, "# %15s %lf %10s %lf", body->name, &body->m, color, &rad);
+            if (a >= 3) {
+                // parse color
+                int number = strtol(color, NULL, 16);
+                double r, g, b;
+                b = ((number >> 0) & 0xff) / 256.;
+                g = ((number >> 8) & 0xff) / 256.;
+                r = ((number >> 16) & 0xff) / 256.;
+
+                body->cr = r;
+                body->cg = g;
+                body->cb = b;
+            }
+            if (a >= 4) {
+                body->rad = rad;
+            }
         } else if (!ctx->header_processed) {
             ctx->header_processed = 1;
 
@@ -211,6 +237,7 @@ void on_new_data(GObject* input, GAsyncResult* res, gpointer user_data) {
             const char* sep = " ";
             char* p = line;
             p = strtok(p, sep); // skip time
+            printf("time=%s\n", p);
             for (int i = 0; p && i < ctx->nbodies; i++) {
                 if ((p = strtok(NULL, sep))) ctx->bodies[i].r[0] = atof(p);
                 if ((p = strtok(NULL, sep))) ctx->bodies[i].r[1] = atof(p);

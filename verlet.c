@@ -5,11 +5,15 @@
 
 struct body {
     char name[16];
+    char color[16];
+    double rad;
     double r[3];
     double v[3];
     double a[3];
     double a_next[3];
     double m;
+    double max_rad;
+    double min_rad;
     int fixed;
 };
 
@@ -62,6 +66,25 @@ void verlet_next(struct data* data) {
         for (int k = 0; k < 3; k++) {
             // new pos
             b->r[k] = b->r[k] + b->v[k] * dt + b->a[k] * dt * dt * 0.5;
+        }
+
+        double R = 0;
+        if (b->min_rad >= 0 || b->max_rad >= 0) {
+            for (int k = 0; k < 3; k++) {
+                R += b->r[k] * b->r[k];
+            }
+            R = sqrt(R);
+        }
+
+        if (b->min_rad > 0 && R < b->min_rad) {
+            for (int k = 0; k < 3; k++) {
+                b->r[k] = b->min_rad * b->r[k] / R;
+            }
+        }
+        if (b->max_rad > 0 && R > b->max_rad) {
+            for (int k = 0; k < 3; k++) {
+                b->r[k] = b->max_rad * b->r[k] / R;
+            }
         }
     }
 
@@ -197,6 +220,22 @@ void load(struct data* data, const char* fn) {
         {
             goto err;
         }
+        strcpy(data->bodies[i].color, "000000");
+        data->bodies[i].min_rad = -1;
+        data->bodies[i].max_rad = -1;
+        data->bodies[i].rad = 1;
+    }
+
+    // properties
+    int i;
+    char color[10];
+    double min_radius, max_radius;
+    double rad;
+    while (fscanf(f, "%d %10s %lf %lf %lf", &i, color, &min_radius, &max_radius, &rad) == 5) {   
+        strcpy(data->bodies[i].color, color);
+        data->bodies[i].min_rad = min_radius;
+        data->bodies[i].max_rad = max_radius;
+        data->bodies[i].rad = rad;
     }
 
     fclose(f);
@@ -222,7 +261,7 @@ void print_header(struct data* data) {
     printf("\n");
     // comment
     for (int i = 0; i < data->nbodies; i++) {
-        printf("# %s %le\n", data->bodies[i].name, data->bodies[i].m);
+        printf("# %s %le %s %lf\n", data->bodies[i].name, data->bodies[i].m, data->bodies[i].color, data->bodies[i].rad);
     }
 }
 
