@@ -89,7 +89,10 @@ double kepler(double dt) {
 
     double max_err = 0;
 
-    for (int i = 0; i < 100; i++) {
+    double T = 0.1;
+    double t = 0;
+
+    while (t < T) {
         euler_next(&data);
 
         double r = 0;
@@ -101,6 +104,8 @@ double kepler(double dt) {
         if (max_err < err) {
             max_err = err;
         }
+
+	t += dt;
     }
     return max_err;
 }
