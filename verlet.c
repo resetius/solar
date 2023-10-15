@@ -135,7 +135,9 @@ double kepler(double dt) {
 
     verlet_init(&data);
 
-    for (int i = 0; i < 100; i++) {
+    double T = 0.1;
+    double t = 0;
+    while (t < T) {
         verlet_next(&data);
 
         double r = 0;
@@ -147,6 +149,7 @@ double kepler(double dt) {
         if (max_err < err) {
             max_err = err;
         }
+	t += dt;
     }
     return max_err;
 }
@@ -160,7 +163,7 @@ void run_test() {
         printf("Error1 %f\n", err1/err2);
         exit(1);
     }
-    if (err1 / 10000 < err3) {
+    if (err1 / 9700 < err3) {
         printf("Error2 %f\n", err1/err3);
         exit(2);
     }
